@@ -3,18 +3,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { marked } from "marked";
 import { compilePack } from "@foundryvtt/foundryvtt-cli";
 
 const MODULE_ID = "gear-forge";
 const REPO = "Kabellosan/gear-forge";
-const RAW = `https://raw.githubusercontent.com/${REPO}/main`;
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const NOTE = "/home/captain/cloud-lab/obsidian-data/vault/Ikairos-Server/Capt. Kabel Pairate Vault/"
   + "50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/Dragonbane - Arms & Armour Tags (Homebrew).md";
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
-const DIST = path.join(ROOT, "dist", MODULE_ID);
 const SRC = path.join(ROOT, "dist", "_src");
 const STATS = { coreVersion: "14.0", systemId: null, systemVersion: null };
 
@@ -24,6 +21,7 @@ const id = key => [...crypto.createHash("sha256").update(key).digest()].slice(0,
   .map(b => ID_CHARS[b % ID_CHARS.length]).join("");
 
 const md = fs.readFileSync(NOTE, "utf8");
+const plainText = s => String(s ?? "").replace(/\*\*|\*|`/g, "").replace(/\s*📜\s*/g, " ").trim();
 const inline = s => marked.parseInline(s.replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, "$1"));
 
 /* ---------------- Tables ---------------- */
@@ -70,7 +68,7 @@ function buildTable(key, name, formula, rows, description, img) {
   return {
     _id: tableId, _key: `!tables!${tableId}`, name, img, description, formula,
     replacement: true, displayRoll: true, folder: null, sort: 0, ownership: { default: 0 },
-    flags: {}, _stats: STATS,
+    flags: { [MODULE_ID]: { kind: key } }, _stats: STATS,
     results: rows.map(r => {
       const label = r.tag.replace(/\*\*/g, "");
       const plain = label.replace(/\s*📜\s*/, "").trim();
@@ -83,7 +81,7 @@ function buildTable(key, name, formula, rows, description, img) {
         img: r.points < 0 ? "icons/svg/skull.svg" : "icons/svg/sword.svg",
         name: plain,
         description: `<p>(${signed(r.points)})${printed} — ${what}<em>Dragonbane:</em> ${inline(r.rule)}</p>`,
-        flags: { [MODULE_ID]: { tag: plain, points: r.points } }, _stats: STATS
+        flags: { [MODULE_ID]: { tag: plain, points: r.points, what: plainText(r.what), rule: plainText(r.rule) } }, _stats: STATS
       };
     })
   };
@@ -109,7 +107,7 @@ const intro = sections.shift().replace(/^# .*\n/, "")
   .replace(/^> \[!\w+\] (.*)$/m, "> **$1**");
 const toHtml = text => marked.parse(text.replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, "$1"));
 const tableLinks = "\n\n**Roll tables:** " + tables.map(t => `@UUID[${tableUuid(t)}]{${t.name}}`).join(" · ")
-  + `\n\n**Macro:** *Forge Gear* rolls on a table and whispers the result, net points and price to the GM.`;
+  + `\n\n**The Forge:** the *Gear Forge* button in the Items sidebar (or right-click a weapon, shield or armour). Drop a base item, roll tags, reroll or hide any of them, and create the item. Painting is off until the GM turns it on in the module settings.`;
 
 const journalId = id("journal:rules");
 const pages = [{ name: "About", body: intro + tableLinks }]
@@ -143,6 +141,7 @@ const macro = {
 /* ---------------- Write & compile ---------------- */
 
 fs.rmSync(path.join(ROOT, "dist"), { recursive: true, force: true });
+fs.rmSync(path.join(ROOT, "packs"), { recursive: true, force: true });
 const packs = [
   { name: "tag-tables", label: "Gear Forge — Tables", type: "RollTable", docs: tables, ownership: { PLAYER: "NONE", ASSISTANT: "OWNER" } },
   { name: "tag-rules", label: "Gear Forge — Rules", type: "JournalEntry", docs: [journal], ownership: { PLAYER: "OBSERVER", ASSISTANT: "OWNER" } },
@@ -152,7 +151,7 @@ for ( const pack of packs ) {
   const src = path.join(SRC, pack.name);
   fs.mkdirSync(src, { recursive: true });
   for ( const doc of pack.docs ) fs.writeFileSync(path.join(src, `${doc._id}.json`), JSON.stringify(doc, null, 2));
-  await compilePack(src, path.join(DIST, "packs", pack.name));
+  await compilePack(src, path.join(ROOT, "packs", pack.name));
 }
 
 const manifest = {
@@ -163,20 +162,15 @@ const manifest = {
   version: VERSION,
   authors: [{ name: "Captain Kabello" }],
   url: `https://github.com/${REPO}`,
-  manifest: `${RAW}/module.json`,
-  download: `${RAW}/releases/${MODULE_ID}-${VERSION}.zip`,
+  manifest: `https://github.com/${REPO}/releases/latest/download/module.json`,
+  download: `https://github.com/${REPO}/releases/download/v${VERSION}/module.zip`,
   compatibility: { minimum: "13", verified: "14" },
+  esmodules: ["scripts/main.mjs"],
+  styles: ["styles/gear-forge.css"],
   packs: packs.map(p => ({ name: p.name, label: p.label, path: `packs/${p.name}`, type: p.type, ownership: p.ownership })),
   packFolders: [{ name: "Gear Forge", sorting: "m", color: "#5a3a1a", packs: packs.map(p => p.name) }]
 };
-fs.writeFileSync(path.join(DIST, "module.json"), JSON.stringify(manifest, null, 2));
-
-// Release: zip with module files at the root, published to releases/, manifest copied to the repo root.
-fs.mkdirSync(path.join(ROOT, "releases"), { recursive: true });
-const zip = path.join(ROOT, "releases", `${MODULE_ID}-${VERSION}.zip`);
-execFileSync("python3", ["-c", `
-import shutil; shutil.make_archive(${JSON.stringify(zip.replace(/\.zip$/, ""))}, "zip", ${JSON.stringify(DIST)})
-`]);
-fs.copyFileSync(path.join(DIST, "module.json"), path.join(ROOT, "module.json"));
+// module.json lives at the repo root; pushing a new version to main publishes a release (see .github/workflows).
+fs.writeFileSync(path.join(ROOT, "module.json"), JSON.stringify(manifest, null, 2) + "\n");
 console.log(`Built ${MODULE_ID} ${VERSION}: ${tables.map(t => `${t.name} (${t.results.length})`).join(", ")}, `
-  + `${pages.length} journal pages, 1 macro\n→ ${zip}`);
+  + `${pages.length} journal pages, 1 macro`);
