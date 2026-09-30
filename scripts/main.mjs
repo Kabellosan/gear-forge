@@ -113,12 +113,43 @@ async function tagTable(kind) {
   return table;
 }
 
-async function rollTag(kind) {
-  const table = await tagTable(kind);
+const enchantTable = (kind) => (kind === "armour" ? "armour-enchantments" : "weapon-enchantments");
+
+async function rollTag(tableKind, parent = null) {
+  const table = await tagTable(tableKind);
   const { roll, results } = await table.roll();
   const r = results[0];
   const f = r.flags?.[MOD] ?? {};
-  return { roll: roll.total, name: f.tag ?? r.name, points: f.points ?? 0, what: f.what ?? "", rule: f.rule ?? L.stripHTML(r.description), hidden: false };
+  return {
+    id: foundry.utils.randomID(), parent, roll: roll.total,
+    name: f.tag ?? r.name, points: f.points ?? 0, what: f.what ?? "", rule: f.rule ?? L.stripHTML(r.description),
+    magic: !!f.magic, rank: f.rank ?? null, drawback: !!f.drawback, special: f.special ?? null, hidden: false
+  };
+}
+
+/**
+ * Roll one tag and everything it sends you to: Enchanted rolls enchantments, Cursed rolls
+ * drawbacks, and every drawback pays for one enchantment (Book of Magic's printed trade).
+ */
+async function rollExpanded(tableKind, itemKind, parent = null, depth = 0) {
+  const tag = await rollTag(tableKind, parent);
+  const out = [tag];
+  if (depth > 4) return out;
+  for (let i = 0; i < (tag.special?.enchant ?? 0); i++) out.push(...await rollExpanded(enchantTable(itemKind), itemKind, tag.id, depth + 1));
+  for (let i = 0; i < (tag.special?.drawback ?? 0); i++) out.push(...await rollExpanded("drawbacks", itemKind, tag.id, depth + 1));
+  if (tag.drawback && !tag.special) out.push(...await rollExpanded(enchantTable(itemKind), itemKind, tag.id, depth + 1));
+  return out;
+}
+
+/** A tag and all tags it caused, as a set of ids. */
+function family(tags, id) {
+  const ids = new Set([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const t of tags) if (t.parent && ids.has(t.parent) && !ids.has(t.id)) { ids.add(t.id); grew = true; }
+  }
+  return ids;
 }
 
 /* ------------------------------------------------------------------ */
@@ -271,6 +302,7 @@ function appendHTML(existing, extra) {
 async function createItem(s) {
   const tags = s.tags;
   const mult = L.priceMultiplier(L.netPoints(tags));
+  const unique = L.isUnique(tags);
   const data = s.base ? foundry.utils.deepClone(s.base) : {
     name: s.baseName || KINDS[s.kind],
     type: s.kind === "armour" ? "armor" : "weapon",
@@ -284,8 +316,9 @@ async function createItem(s) {
   if (s.image) data.img = s.image;
   data.system = data.system ?? {};
   Object.assign(data.system, L.applyEffects(data.system, tags));
-  const price = L.scaleCost(data.system.cost, mult);
+  const price = unique ? null : L.scaleCost(data.system.cost, mult);
   if (price) data.system.cost = price;
+  if (unique && game.system.id === "dragonbane") Object.assign(data.system, { cost: "", supply: "unique" });
   const text = L.describeTags(tags, { multiplier: mult, price: price ? `${price} (×${mult})` : undefined });
   if ("itemDescription" in data.system || game.system.id === "dragonbane") {
     data.system.itemDescription = appendHTML(data.system.itemDescription, text.visible);
@@ -326,6 +359,8 @@ class GearForgeApp extends ApplicationV2 {
     actions: {
       roll: GearForgeApp.onRoll,
       add: GearForgeApp.onAdd,
+      enchant: GearForgeApp.onEnchant,
+      curse: GearForgeApp.onCurse,
       reroll: GearForgeApp.onReroll,
       remove: GearForgeApp.onRemove,
       hide: GearForgeApp.onHide,
@@ -368,6 +403,7 @@ class GearForgeApp extends ApplicationV2 {
     const s = this.gf;
     const net = L.netPoints(s.tags);
     const mult = L.priceMultiplier(net);
+    const unique = L.isUnique(s.tags);
     const price = L.scaleCost(s.base?.system?.cost, mult);
     const painting = game.settings.get(MOD, "paint");
     const cost = L.estimateCost(game.settings.get(MOD, "quality"), inputCount(s.base));
@@ -385,9 +421,9 @@ class GearForgeApp extends ApplicationV2 {
          </div>`;
 
     const tags = s.tags.map((t, i) => `
-      <li class="${t.points < 0 ? "is-flaw" : ""} ${t.hidden ? "is-hidden" : ""}">
+      <li class="${t.points < 0 || t.drawback ? "is-flaw" : ""} ${t.magic && !t.drawback ? "is-magic" : ""} ${t.parent ? "is-child" : ""} ${t.hidden ? "is-hidden" : ""}">
         <span class="gf-num">${t.roll}</span>
-        <span class="gf-tag"><strong>${L.escapeHTML(t.name)}</strong> (${L.signed(t.points)})
+        <span class="gf-tag"><strong>${L.escapeHTML(t.name)}</strong> (${t.magic ? (t.drawback ? "drawback" : `rank ${t.rank}`) : L.signed(t.points)})
           <small>${L.escapeHTML(t.what)} <em>${L.escapeHTML(t.rule)}</em></small></span>
         <a data-action="hide" data-index="${i}" title="${t.hidden ? "Hidden: only the GM sees it on the item" : "Visible to players"}"><i class="fa-solid ${t.hidden ? "fa-eye-slash" : "fa-eye"}"></i></a>
         <a data-action="reroll" data-index="${i}" title="Reroll"><i class="fa-solid fa-dice"></i></a>
@@ -404,9 +440,11 @@ class GearForgeApp extends ApplicationV2 {
         <label class="gf-count">Tags <input type="number" name="count" value="${s.count}" min="1" max="6"></label>
         <button type="button" data-action="roll" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-dice-d20"></i> ${s.tags.length ? "Roll all again" : "Roll tags"}</button>
         <button type="button" data-action="add" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-plus"></i> One more</button>
+        <button type="button" data-action="enchant" ${s.busy ? "disabled" : ""} title="Roll a Book of Magic enchantment"><i class="fa-solid fa-wand-sparkles"></i> Enchant</button>
+        <button type="button" data-action="curse" ${s.busy ? "disabled" : ""} title="Roll a drawback; it pays for one enchantment"><i class="fa-solid fa-skull"></i> Curse</button>
       </div>
       ${s.tags.length ? `<ul class="gf-tags">${tags}</ul>
-        <p class="gf-summary">Net <strong>${L.signed(net)}</strong> · ${price ? `<strong>${price}</strong> (×${mult})` : `×${mult} book price`}</p>
+        <p class="gf-summary">${unique ? `<strong>Magical · Unique</strong>: no market price` : `Net <strong>${L.signed(net)}</strong> · ${price ? `<strong>${price}</strong> (×${mult})` : `×${mult} book price`}`}</p>
         <label>Name<input type="text" name="name" value="${L.escapeHTML(s.name)}"></label>
         ${art}` : ""}
       <footer class="gf-footer">
@@ -455,7 +493,7 @@ class GearForgeApp extends ApplicationV2 {
     await this.withBusy("roll", async () => {
       try {
         const tags = [];
-        for (let i = 0; i < s.count; i++) tags.push(await rollTag(s.kind));
+        for (let i = 0; i < s.count; i++) tags.push(...await rollExpanded(s.kind, s.kind));
         Object.assign(s, { tags, image: null, status: "" });
         this.autoName();
       } catch (err) { reportError("could not roll tags", err); }
@@ -464,18 +502,40 @@ class GearForgeApp extends ApplicationV2 {
 
   static async onAdd() {
     const s = this.gf;
-    try { s.tags.push(await rollTag(s.kind)); this.autoName(); this.render(); }
+    try { s.tags.push(...await rollExpanded(s.kind, s.kind)); this.autoName(); this.render(); }
     catch (err) { reportError("could not roll a tag", err); }
+  }
+
+  static async onEnchant() {
+    const s = this.gf;
+    try { s.tags.push(...await rollExpanded(enchantTable(s.kind), s.kind)); this.autoName(); this.render(); }
+    catch (err) { reportError("could not enchant", err); }
+  }
+
+  static async onCurse() {
+    const s = this.gf;
+    try { s.tags.push(...await rollExpanded("drawbacks", s.kind)); this.autoName(); this.render(); }
+    catch (err) { reportError("could not curse", err); }
   }
 
   static async onReroll(event, target) {
     const s = this.gf;
-    try { s.tags[Number(target.dataset.index)] = await rollTag(s.kind); this.autoName(); this.render(); }
-    catch (err) { reportError("could not reroll", err); }
+    try {
+      const old = s.tags[Number(target.dataset.index)];
+      const tableKind = old.drawback ? "drawbacks" : old.magic ? enchantTable(s.kind) : s.kind;
+      const fresh = await rollExpanded(tableKind, s.kind, old.parent);
+      const gone = family(s.tags, old.id);
+      const at = s.tags.findIndex((t) => t.id === old.id);
+      const kept = s.tags.filter((t) => !gone.has(t.id));
+      kept.splice(Math.min(at, kept.length), 0, ...fresh);
+      s.tags = kept;
+      this.autoName(); this.render();
+    } catch (err) { reportError("could not reroll", err); }
   }
 
   static onRemove(event, target) {
-    this.gf.tags.splice(Number(target.dataset.index), 1);
+    const gone = family(this.gf.tags, this.gf.tags[Number(target.dataset.index)].id);
+    this.gf.tags = this.gf.tags.filter((t) => !gone.has(t.id));
     this.autoName();
     this.render();
   }

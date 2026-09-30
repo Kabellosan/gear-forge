@@ -8,7 +8,7 @@ import { compilePack } from "@foundryvtt/foundryvtt-cli";
 
 const MODULE_ID = "gear-forge";
 const REPO = "Kabellosan/gear-forge";
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const NOTE = "/home/captain/cloud-lab/obsidian-data/vault/Ikairos-Server/Capt. Kabel Pairate Vault/"
   + "50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/Dragonbane - Arms & Armour Tags (Homebrew).md";
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
@@ -26,8 +26,11 @@ const inline = s => marked.parseInline(s.replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]
 
 /* ---------------- Tables ---------------- */
 
-// Weapon rows: | 01 | **Name** 📜 | What it is | Dragonbane |   — points come from the band heading "(+1)".
-// Shield/armour rows: | 1 | **Name** | ± | Dragonbane |
+// Weapon rows:      | 01 | **Name** 📜 | What it is | Dragonbane |   — points from the band heading "(+1)".
+// Shield/armour:    | 1 | **Name** | ± | Dragonbane |
+// Enchantments:     | 1–2 | **Name** | Rank | Dragonbane |
+// Drawbacks:        | 1 | **Name** | Dragonbane |
+// A first cell like "73–74" covers a range of results.
 function parseSection(startHeading, endHeading) {
   const start = md.indexOf(startHeading);
   const end = endHeading ? md.indexOf(endHeading, start) : md.length;
@@ -37,33 +40,55 @@ function parseSection(startHeading, endHeading) {
 const cells = line => line.split("|").slice(1, -1).map(c => c.trim());
 const pts = s => Number(s.replace("−", "-").replace("+", ""));
 const signed = n => n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0";
+const ROW = /^\| (\d+)(?:–(\d+))? \| \*\*/;
+const range = (line) => {
+  const [, a, b] = line.match(ROW);
+  const lo = a === "00" ? 100 : Number(a);
+  return [lo, b ? (b === "00" ? 100 : Number(b)) : lo];
+};
+
+// Tags that send the Forge to another table: { table, times, drawback }.
+const SPECIAL = {
+  "Enchanted": { enchant: 1 },
+  "Twice Enchanted": { enchant: 2 },
+  "Cursed": { drawback: 1 },
+  "Doubly cursed": { drawback: 2 }
+};
 
 function weaponRows() {
-  let bandPoints = null;
+  let bandPoints = 0;
   const rows = [];
-  for ( const line of parseSection("## ⚔️", "## 🛡️") ) {
-    const band = line.match(/^### .*\(([+−-]?\d)\)/);
-    if ( band ) { bandPoints = pts(band[1]); continue; }
-    const m = line.match(/^\| (\d\d) \|/);
-    if ( !m ) continue;
-    const [num, tag, what, rule] = cells(line);
-    rows.push({ roll: num === "00" ? 100 : Number(num), tag, points: bandPoints, what, rule });
+  for ( const line of parseSection("## ⚔️", "## ✨") ) {
+    if ( line.startsWith("### ") ) { const m = line.match(/\(([+−-]?\d)\)/); bandPoints = m ? pts(m[1]) : 0; continue; }
+    if ( !ROW.test(line) ) continue;
+    const [, tag, what, rule] = cells(line);
+    rows.push({ range: range(line), tag, points: bandPoints, what, rule });
   }
   return rows;
 }
 
 function d20Rows(startHeading, endHeading) {
-  return parseSection(startHeading, endHeading).filter(l => /^\| \d+ \|/.test(l)).map(line => {
-    const [num, tag, points, rule] = cells(line);
-    return { roll: Number(num), tag, points: pts(points), what: null, rule };
+  return parseSection(startHeading, endHeading).filter(l => ROW.test(l)).map(line => {
+    const [, tag, points, rule] = cells(line);
+    return { range: range(line), tag, points: pts(points), what: null, rule };
+  });
+}
+
+function magicRows(startHeading, endHeading, { ranked }) {
+  return parseSection(startHeading, endHeading).filter(l => ROW.test(l)).map(line => {
+    const c = cells(line);
+    return ranked
+      ? { range: range(line), tag: c[1], points: 0, rank: Number(c[2]), what: null, rule: c[3], magic: true }
+      : { range: range(line), tag: c[1], points: 0, what: null, rule: c[2], magic: true, drawback: true };
   });
 }
 
 function buildTable(key, name, formula, rows, description, img) {
   const tableId = id(`table:${key}`);
-  const expected = Number(formula.slice(2));
-  if ( rows.length !== expected || rows.some((r, i) => r.roll !== i + 1) ) {
-    throw new Error(`${name}: expected ${expected} consecutive rows, got ${rows.length}`);
+  const size = Number(formula.slice(2));
+  const covered = rows.flatMap(r => Array.from({ length: r.range[1] - r.range[0] + 1 }, (_, i) => r.range[0] + i));
+  if ( covered.length !== size || covered.some((n, i) => n !== i + 1) ) {
+    throw new Error(`${name}: rows must cover 1–${size} exactly once, got ${covered.join(",")}`);
   }
   return {
     _id: tableId, _key: `!tables!${tableId}`, name, img, description, formula,
@@ -74,14 +99,18 @@ function buildTable(key, name, formula, rows, description, img) {
       const plain = label.replace(/\s*📜\s*/, "").trim();
       const printed = label.includes("📜") ? " 📜 <em>printed</em>" : "";
       const what = r.what ? `${inline(r.what)} ` : "";
-      const resultId = id(`result:${key}:${r.roll}`);
+      const head = r.magic ? (r.rank ? `(rank ${r.rank})` : "(drawback)") : `(${signed(r.points)})`;
+      const resultId = id(`result:${key}:${r.range[0]}`);
+      const flags = { tag: plain, points: r.points, what: plainText(r.what), rule: plainText(r.rule) };
+      if ( r.magic ) Object.assign(flags, { magic: true, rank: r.rank ?? null, drawback: !!r.drawback });
+      if ( SPECIAL[plain] ) flags.special = SPECIAL[plain];
       return {
-        _id: resultId, _key: `!tables.results!${tableId}.${resultId}`, type: "text", weight: 1,
-        range: [r.roll, r.roll], drawn: false, documentUuid: null,
-        img: r.points < 0 ? "icons/svg/skull.svg" : "icons/svg/sword.svg",
+        _id: resultId, _key: `!tables.results!${tableId}.${resultId}`, type: "text", weight: r.range[1] - r.range[0] + 1,
+        range: r.range, drawn: false, documentUuid: null,
+        img: r.drawback || r.points < 0 ? "icons/svg/skull.svg" : r.magic ? "icons/svg/aura.svg" : "icons/svg/sword.svg",
         name: plain,
-        description: `<p>(${signed(r.points)})${printed} — ${what}<em>Dragonbane:</em> ${inline(r.rule)}</p>`,
-        flags: { [MODULE_ID]: { tag: plain, points: r.points, what: plainText(r.what), rule: plainText(r.rule) } }, _stats: STATS
+        description: `<p>${head}${printed} — ${what}<em>Dragonbane:</em> ${inline(r.rule)}</p>`,
+        flags: { [MODULE_ID]: flags }, _stats: STATS
       };
     })
   };
@@ -95,7 +124,15 @@ const tables = [
     "1–15 virtues, 16–20 flaws.", "icons/equipment/shield/heater-steel-worn.webp"),
   buildTable("armour", "Armour Tags (d20)", "1d20", d20Rows("## 🥋", "## ❓"),
     "1–15 virtues, 16–20 flaws. Applies to the book's armour and helmets.",
-    "icons/equipment/chest/breastplate-banded-steel.webp")
+    "icons/equipment/chest/breastplate-banded-steel.webp"),
+  buildTable("weapon-enchantments", "Enchantments — Weapons & Shields (d20)", "1d20",
+    magicRows("## ✨ d20 Enchantments", "## ✨ d12 Enchantments", { ranked: true }),
+    "Book of Magic (Beta 3) enchanting spells, weighted by rank.", "icons/magic/symbols/runes-star-blue.webp"),
+  buildTable("armour-enchantments", "Enchantments — Armour (d12)", "1d12",
+    magicRows("## ✨ d12 Enchantments", "## 💀", { ranked: true }),
+    "Book of Magic (Beta 3) enchanting spells for armour and helmets, weighted by rank.", "icons/magic/defensive/shield-barrier-blue.webp"),
+  buildTable("drawbacks", "Drawbacks (d12)", "1d12", magicRows("## 💀", "## 🛡️", { ranked: false }),
+    "Book of Magic (Beta 3) drawbacks. Each pays for one enchantment.", "icons/magic/unholy/strike-body-explode-disintegrate.webp")
 ];
 const tableUuid = t => `Compendium.${MODULE_ID}.tag-tables.RollTable.${t._id}`;
 

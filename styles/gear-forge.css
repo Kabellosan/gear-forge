@@ -29,3 +29,6 @@
 .gear-forge-card img { display: block; width: 128px; height: 128px; margin: 0 auto 0.3rem; border: none; }
 .gear-forge-card h3 { text-align: center; }
 .gear-forge-card ul { padding-left: 1.1rem; }
+.gear-forge .gf-tags li.is-magic { background: rgba(70, 110, 190, 0.16); }
+.gear-forge .gf-tags li.is-child { margin-left: 1.5rem; }
+.gear-forge .gf-row { flex-wrap: wrap; }

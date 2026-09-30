@@ -17,36 +17,59 @@ export function kindOf(item) {
 /**
  * Tags that change a Dragonbane item's stats, not just its description.
  * Everything else lives in the description only: the GM applies it at the table.
+ * feature/unfeature add or remove system features; swap replaces one damage type with another.
  */
 export const EFFECTS = {
-  "Ergonomic Grip": { str: -3 },
-  "Demanding": { str: +3 },
+  // Weapons
   "Sturdy": { durability: +3 },
+  "Ergonomic Grip": { str: -3 },
+  "Mastercrafted": { str: -3, durability: +3 },
+  "Subtle": { feature: ["subtle"] },
+  "Toppling": { feature: ["toppling"] },
+  "Long": { feature: ["long"] },
+  "Can Be Thrown": { feature: ["thrown"] },
+  "Parrying Guard": { durability: +6, damageStep: -1 },
+  "Light Build": { str: -3, damageStep: -1 },
+  "Heavy Head": { damageStep: +1, str: +3, durability: -3 },
+  "Pole-Mounted": { feature: ["long"], grip: "grip2h" },
+  "Short Haft": { unfeature: ["long"], grip: "grip1h" },
+  "Throwing Balance": { feature: ["thrown"], damageStep: -1 },
+  "Chain-Linked": { feature: ["toppling", "noparry"] },
+  "Blunted Edge": { swap: ["slashing", "bludgeoning"] },
+  "Broad Blade": { unfeature: ["piercing"], durability: +3 },
+  "Spiked Head": { swap: ["bludgeoning", "piercing"] },
+  "Dragon Glass": { halveDurability: true },
+  "No Damage Bonus": { feature: ["noDamageBonus"] },
   "Fragile": { durability: -3 },
+  "Demanding": { str: +3 },
+  "Cannot Parry": { feature: ["noparry"] },
+  "Saddle-Only": { feature: ["mounted"] },
+  // Shields
+  "Hooked Rim": { feature: ["toppling"] },
   "Reinforced Boss": { durability: +3 },
+  "Light Frame": { str: -3 },
+  "Shield Spike": { swap: ["bludgeoning", "piercing"] },
   "Splintery": { durability: -3 },
-  "Masterpiece of the Age": { durability: +3, damageStep: 1 },
-  "Subtle": { feature: "subtle" },
-  "Toppling": { feature: "toppling" },
-  "Throwable": { feature: "thrown" },
-  "Returning Flight": { feature: "thrown" },
-  "Long": { feature: "long" },
-  "Unwieldy": { feature: "noparry" },
-  "Saddle-Only": { feature: "mounted" },
+  // Armour
+  "Articulated": { rating: -1 },
+  "Muffled": { rating: -1 },
   "Padded Under-Layer": { bonus: "bludgeoning" },
-  "Master-Forged": { rating: +1 }
+  // Enchantments (Book of Magic, power level 1)
+  "Unbreakable": { durability: +9 },
+  "Enchanted Weapon": { feature: ["enchanted1"] },
+  "Epic Armor": { rating: +1 }
 };
 
 const DIE_STEPS = [4, 6, 8, 10, 12];
 
-/** "D8" → "D10", "2D6" → "2D8", "D12" → "D12+1". Anything unparseable is returned unchanged. */
+/** "D8" → "D10", "2D6" → "2D8", "D12" → "D12+1"; steps down stop at D4. Unparseable → unchanged. */
 export function stepDamage(damage, steps = 1) {
   const m = String(damage ?? "").trim().match(/^(\d*)\s*[dD](\d+)(.*)$/);
   if (!m) return damage;
   const [, count, sides, rest] = m;
   const i = DIE_STEPS.indexOf(Number(sides));
   if (i < 0) return damage;
-  const j = i + steps;
+  const j = Math.max(0, i + steps);
   if (j < DIE_STEPS.length) return `${count}D${DIE_STEPS[j]}${rest}`;
   return `${count}D12${rest}+${j - DIE_STEPS.length + 1}`;
 }
@@ -59,41 +82,57 @@ export function applyEffects(system = {}, tags = []) {
   const out = {};
   const features = new Set(system.features ?? []);
   const bonuses = new Set(system.bonuses ?? []);
-  let str = system.str, durability = system.durability, rating = system.rating, damage = system.damage;
+  let { str, durability, rating, damage } = system;
+  let grip = system.grip?.value;
   for (const tag of tags) {
     const fx = EFFECTS[tag.name];
     if (!fx) continue;
     if (fx.str && typeof str === "number") str = Math.max(0, str + fx.str);
-    if (fx.durability && typeof durability === "number") durability = Math.max(1, durability + fx.durability);
-    if (fx.rating && typeof rating === "number") rating += fx.rating;
+    if (fx.durability && typeof durability === "number" && durability > 0) durability = Math.max(1, durability + fx.durability);
+    if (fx.halveDurability && typeof durability === "number") durability = Math.ceil(durability / 2);
+    if (fx.rating && typeof rating === "number") rating = Math.max(0, rating + fx.rating);
     if (fx.damageStep && damage) damage = stepDamage(damage, fx.damageStep);
-    if (fx.feature && system.features) features.add(fx.feature);
+    if (fx.grip && grip !== undefined) grip = fx.grip;
+    if (system.features) {
+      for (const f of fx.feature ?? []) features.add(f);
+      for (const f of fx.unfeature ?? []) features.delete(f);
+      if (fx.swap && features.has(fx.swap[0])) { features.delete(fx.swap[0]); features.add(fx.swap[1]); }
+    }
     if (fx.bonus && system.bonuses) bonuses.add(fx.bonus);
   }
   if (str !== system.str) out.str = str;
   if (durability !== system.durability) out.durability = durability;
   if (rating !== system.rating) out.rating = rating;
   if (damage !== system.damage) out.damage = damage;
-  if (system.features && features.size !== system.features.length) out.features = [...features];
-  if (system.bonuses && bonuses.size !== system.bonuses.length) out.bonuses = [...bonuses];
+  if (grip !== system.grip?.value) out.grip = { value: grip };
+  const same = (a, b) => a.size === b.length && b.every((x) => a.has(x));
+  if (system.features && !same(features, system.features)) out.features = [...features];
+  if (system.bonuses && !same(bonuses, system.bonuses)) out.bonuses = [...bonuses];
   return out;
 }
 
-export const netPoints = (tags) => tags.reduce((sum, t) => sum + (t.points ?? 0), 0);
+/** Points count only for mundane tags; magic makes an item Unique instead. */
+export const netPoints = (tags) => tags.reduce((sum, t) => sum + (t.magic ? 0 : (t.points ?? 0)), 0);
+export const isUnique = (tags) => tags.some((t) => t.magic);
 
-/** The price multiplier for a net score: +n → ×(1+n); −n → ×(1 − ¼n), never below ¼. */
+/**
+ * Price multiplier, anchored on RAW Mastercrafted (two improvements, ×10): ×√10 per point,
+ * rounded to 3, 10, 30, 100… Flaws: ×½ for −1, ×¼ below that (no printed rule).
+ */
 export function priceMultiplier(net) {
-  return net >= 0 ? 1 + net : Math.max(0.25, 1 - 0.25 * Math.abs(net));
+  if (net > 0) return (net % 2 ? 3 : 1) * 10 ** Math.floor(net / 2);
+  if (net === 0) return 1;
+  return net === -1 ? 0.5 : 0.25;
 }
 
 const COIN = { gold: 100, gc: 100, silver: 10, sc: 10, copper: 1, cc: 1 };
 
-/** "12 silver" × 1.5 → "18 silver". Unparseable costs come back unchanged (the multiplier is shown instead). */
+/** "12 silver" × 3 → "36 silver". Unparseable costs come back null (the multiplier is shown instead). */
 export function scaleCost(cost, multiplier) {
   const m = String(cost ?? "").trim().match(/^(\d+(?:[.,]\d+)?)\s*([a-z]+)/i);
   const unit = m && COIN[m[2].toLowerCase()];
   if (!unit) return null;
-  const copper = Math.round(Number(m[1].replace(",", ".")) * unit * multiplier);
+  const copper = Math.max(1, Math.round(Number(m[1].replace(",", ".")) * unit * multiplier));
   if (copper >= 100 && copper % 100 === 0) return `${copper / 100} gold`;
   if (copper >= 10 && copper % 10 === 0) return `${copper / 10} silver`;
   return `${copper} copper`;
@@ -117,7 +156,8 @@ export function slugify(s) {
 export function tagHTML(tag) {
   const what = tag.what ? ` — ${escapeHTML(tag.what)}` : "";
   const rule = tag.rule ? ` <em>Dragonbane:</em> ${escapeHTML(tag.rule)}` : "";
-  return `<li><strong>${escapeHTML(tag.name)}</strong> (${signed(tag.points ?? 0)})${what}${rule}</li>`;
+  const head = tag.magic ? (tag.drawback ? "drawback" : tag.rank ? `rank ${tag.rank}` : "magic") : signed(tag.points ?? 0);
+  return `<li><strong>${escapeHTML(tag.name)}</strong> (${head})${what}${rule}</li>`;
 }
 
 /**
@@ -127,16 +167,19 @@ export function tagHTML(tag) {
 export function describeTags(tags, { multiplier, price } = {}) {
   const shown = tags.filter((t) => !t.hidden);
   const secret = tags.filter((t) => t.hidden);
-  const footer = multiplier === undefined ? "" : `<p><em>Net ${signed(netPoints(tags))} · ${price ?? `×${multiplier} book price`}</em></p>`;
+  const footer = isUnique(tags) ? "<p><em>Magical · Unique: no market price.</em></p>"
+    : multiplier === undefined ? "" : `<p><em>Net ${signed(netPoints(tags))} · ${price ?? `×${multiplier} book price`}</em></p>`;
   return {
     visible: shown.length ? `<h3>Forged</h3><ul>${shown.map(tagHTML).join("")}</ul>` : "",
     hidden: (secret.length ? `<h3>Hidden tags</h3><ul>${secret.map(tagHTML).join("")}</ul>` : "") + footer
   };
 }
 
-/** A default name: the strongest virtue's name in front of the base item's name. */
+/** A default name: an enchantment, else the strongest virtue, in brackets after the base item's name. */
 export function suggestName(baseName, tags) {
-  const best = [...tags].filter((t) => (t.points ?? 0) > 0).sort((a, b) => b.points - a.points)[0];
+  const spell = tags.find((t) => t.magic && !t.drawback && !t.hidden && !t.special);
+  if (spell) return `${baseName} (${spell.name})`;
+  const best = [...tags].filter((t) => (t.points ?? 0) > 0 && !t.special && !t.hidden).sort((a, b) => b.points - a.points)[0];
   return best ? `${baseName} (${best.name})` : baseName;
 }
 
@@ -147,7 +190,10 @@ export const DEFAULT_STYLE =
 
 /** What the image model sees: the base item and each tag's *visible* description (or its name), never the rules. */
 export function artPrompt({ baseName, tags, style, editing }) {
-  const looks = tags.map((t) => t.what || t.name).filter(Boolean).map((w) => w.replace(/\.$/, "")).join("; ");
+  const looks = tags.filter((t) => !t.special && !t.drawback && !t.magic).map((t) => t.what || t.name)
+    .filter(Boolean).map((w) => w.replace(/\.$/, ""))
+    .concat(tags.some((t) => t.magic && !t.drawback) ? ["faint magical runes glowing along it"] : [])
+    .join("; ");
   const item = String(baseName ?? "").trim() || "weapon";
   if (editing) {
     return [

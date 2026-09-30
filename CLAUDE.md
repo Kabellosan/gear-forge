@@ -4,6 +4,10 @@ Foundry VTT module for Captain's Dragonbane campaign. Tag tables for rolling up 
 
 ## Design decisions (and why)
 
+- **Choice, not power; RAW first** (Captain, 2026-09-30): "make weapons cool and custom and afford choice for the players… not a power-fantasy", and "balanced towards RAW Dragonbane". Printed features/materials/spells replace our copies; custom tags stay at RAW mundane strength (+1 ≈ half of Mastercrafted); sidegrades preferred. The Rulebook and Book of Magic (Beta 3) are on the server in `~/cloud-lab/resources/dragonbane/` (grep the `.txt`). A balance pass is still owed.
+- **Price** is anchored on RAW Mastercrafted (+2 = ×10, so ×√10 per point: 3, 10, 30, 100…); flaws ×½ / ×¼ (ours). **Magic = Unique** (Rulebook p.73): no price, `supply: "unique"`.
+- **Magic comes only from the Book of Magic**: d20 weapon/shield and d12 armour enchantments (rank-weighted), d12 drawbacks. Enchanted (73–75) and Cursed (00) roll into them automatically; **every drawback rolls one enchantment** (BoM's printed trade). Follow-up tags carry `parent`; rerolling or removing a tag takes its children with it.
+
 - **The vault note is the source of truth for the tags.** `build.mjs` parses `50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/Dragonbane - Arms & Armour Tags (Homebrew).md` into the compendium packs. Change a tag in the note, never in the packs. Keep its row formats: weapon `| 01 | **Name** | what | rule |` under band headings carrying `(+1)`; shield/armour `| 1 | **Name** | ± | rule |`.
 - **Ids are hashed from names**, so rebuilds keep links; renaming a tag changes its id. `tests/lib.test.mjs` fails if an `EFFECTS` key no longer matches a tag name.
 - **Painting is off by default and only happens on a click** (Captain: don't burn dollars on random loot). Rolling never calls fal.ai; the Paint button only renders when the *Paint gear* setting is on, and shows its cost.
@@ -20,7 +24,7 @@ Item types: `weapon` (shields are weapons with feature `shield`), `armor`, `helm
 
 ## Layout
 
-- `build.mjs` – vault note → `packs/` (tables, rules journal, macro) + `module.json`. Needs the vault, so it runs on the server, not in CI; `packs/` is committed.
+- `build.mjs` – vault note → `packs/` (6 tables, rules journal, macro) + `module.json`. First cells like `73–74` are ranges (result weight = size). Needs the vault, so it runs on the server, not in CI; `packs/` is committed.
 - `scripts/lib.mjs` – pure logic (effects, price, descriptions, prompt, request, cost). No Foundry globals.
 - `scripts/main.mjs` – Foundry glue: settings, entry points, Forge window, fal call, item creation.
 - `tests/` – `cd tests && node lib.test.mjs && node smoke.test.mjs` (run `npm run build` first so the name check has tables).
@@ -36,7 +40,7 @@ Item types: `weapon` (shields are weapons with feature `shield`), `armor`, `helm
 
 Foundry v14 on Sqyre (installs by manifest URL only; zip needs module.json at the root). Dragonbane system 4.1.1.
 
-## Open threads (as of v1.1.0)
+## Open threads (as of v1.2.0)
 
 - Nothing run on real Foundry yet: the Forge window, drop handling, `table.roll()` in v14, and the sidebar/context/sheet entry points are mock-tested only.
 - Repainting 64–128 px icons: unknown how well GPT keeps the frame from such small inputs (they're upscaled to 512 before sending). If it drifts, composite a blank frame instead (like Face Forge's ring).

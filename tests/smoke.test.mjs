@@ -18,8 +18,9 @@ class ApplicationV2 {
   async close() { this.#s = 0; }
 }
 const deepClone = (o) => JSON.parse(JSON.stringify(o));
+let idn = 0;
 const setProperty = (o, key, v) => { const p = key.split("."); let t = o; p.slice(0, -1).forEach((k) => (t = t[k] ??= {})); t[p.at(-1)] = v; };
-globalThis.foundry = { applications: { api: { ApplicationV2 } }, utils: { deepClone, setProperty } };
+globalThis.foundry = { applications: { api: { ApplicationV2 } }, utils: { deepClone, setProperty, randomID: () => `id${++idn}` } };
 
 // Browser bits used for image work.
 globalThis.document = { createElement: () => ({ getContext: () => ({ drawImage() {} }), toBlob: (cb, type) => cb(new Blob(["img"], { type })), toDataURL: () => "data:image/png;base64,AAAA" }) };
@@ -43,15 +44,27 @@ globalThis.fetch = async (url, opts) => {
 };
 
 // Tag tables: a fixed sequence of results, like rolls on the real compendium.
-const tag = (name, points, what, rule) => ({ name, description: `<p>${rule}</p>`, flags: { "gear-forge": { tag: name, points, what, rule } } });
-const sequence = [
-  tag("Sturdy", 1, "Thick spine.", "Durability +3."),
-  tag("Subtle", 1, "Quiet.", "+1 damage die on a sneak attack."),
-  tag("Accursed", -3, "It wants blood.", "WIL roll."),
-  tag("Long", 2, "A long haft.", "Melee up to 4 m.")
-];
+const tag = (name, points, what, rule, extra = {}) => ({ name, description: `<p>${rule}</p>`, flags: { "gear-forge": { tag: name, points, what, rule, ...extra } } });
+const sequences = {
+  weapon: [
+    tag("Sturdy", 1, "Thick spine.", "Durability +3."),
+    tag("Subtle", 1, "Quiet.", "+1 damage die on a sneak attack."),
+    tag("Clumsy", -3, "In your way.", "Bane on Evade."),
+    tag("Long", 1, "A long haft.", "Hits up to 4 m away."),
+    tag("Enchanted", 0, "Something was bound into it.", "Roll on Enchantments.", { special: { enchant: 1 } })
+  ],
+  "weapon-enchantments": [tag("Keen Edge", 0, "", "Armour one step lower.", { magic: true, rank: 1 }), tag("Unbreakable", 0, "", "Durability +9.", { magic: true, rank: 1 })],
+  "armour-enchantments": [tag("Supple Armor", 0, "", "No bane on Evade.", { magic: true, rank: 1 })],
+  drawbacks: [tag("Death Wish", 0, "", "Sickly.", { magic: true, drawback: true })],
+  shield: [tag("Hooked Rim", 1, "", "Toppling.")],
+  armour: [tag("Gorget", 1, "", "No double damage.")]
+};
+const counters = {};
 let rolls = 0;
-const table = (kind) => ({ flags: { "gear-forge": { kind } }, roll: async () => { const r = sequence[rolls++ % sequence.length]; return { roll: { total: rolls }, results: [r] }; } });
+const table = (kind) => ({ flags: { "gear-forge": { kind } }, roll: async () => {
+  const seq = sequences[kind]; const i = counters[kind] = (counters[kind] ?? -1) + 1; rolls++;
+  return { roll: { total: rolls }, results: [seq[i % seq.length]] };
+} });
 const settings = { "gear-forge.paint": false, "gear-forge.quality": "medium", "gear-forge.falKey": "", "gear-forge.endpoint": "https://fal.run",
   "gear-forge.styleLink": "", "gear-forge.styleFolder": "", "gear-forge.style": "", "face-forge.falKey": "ff-key" };
 const created = [];
@@ -62,7 +75,7 @@ const longsword = {
 globalThis.game = {
   user: { isGM: true }, world: { id: "vale" }, system: { id: "dragonbane" },
   modules: new Map([["gear-forge", {}]]),
-  packs: new Map([["gear-forge.tag-tables", { getDocuments: async () => ["weapon", "shield", "armour"].map(table) }]]),
+  packs: new Map([["gear-forge.tag-tables", { getDocuments: async () => Object.keys(sequences).map(table) }]]),
   settings: { register() {}, get: (m, k) => { const v = settings[`${m}.${k}`]; if (v === undefined) throw new Error(`no setting ${m}.${k}`); return v; } },
   folders: { find: () => null }
 };
@@ -80,8 +93,8 @@ const check = (ok, what) => { if (!ok) throw new Error(what); };
 const app = await api.open(longsword);
 check(app.lastHTML.includes("Longsword") && app.lastHTML.includes("2D8"), "base item shown");
 await app.constructor.onRoll.call(app);
-check(app.gf.tags.map((t) => t.name).join() === "Sturdy,Subtle,Accursed", "three tags rolled");
-check(app.lastHTML.includes("Net <strong>−1</strong>") && app.lastHTML.includes("9 silver"), "net and price shown");
+check(app.gf.tags.map((t) => t.name).join() === "Sturdy,Subtle,Clumsy", "three tags rolled");
+check(app.lastHTML.includes("Net <strong>−1</strong>") && app.lastHTML.includes("6 silver"), "net and price shown (×½)");
 check(app.gf.name === "Longsword (Sturdy)", "suggested name");
 
 // Painting is off: no button, and calling it does nothing.
@@ -92,6 +105,7 @@ check(falCalls === 0, "no fal.ai call while painting is off");
 // Reroll the curse away, hide nothing, then paint (on) with Face Forge's key.
 await app.constructor.onReroll.call(app, null, { dataset: { index: "2" } });
 check(app.gf.tags[2].name === "Long", "rerolled");
+check(app.lastHTML.includes("Net <strong>+3</strong>") && app.lastHTML.includes("36 gold"), "+3 = ×30");
 settings["gear-forge.paint"] = true;
 await app.render();
 check(app.lastHTML.includes('data-action="paint"') && app.lastHTML.includes("~$0.06"), "paint button with cost");
@@ -107,7 +121,7 @@ await app.constructor.onCreate.call(app);
 const item = created[0];
 check(item.img === app.gf.image && item.folder === "folder1", "item uses the painting, in the Gear Forge folder");
 check(item.system.durability === 15 && item.system.features.includes("long") && item.system.features.includes("subtle"), "effects applied, hidden ones too");
-check(item.system.cost === "6 gold", `price scaled (got ${item.system.cost})`);
+check(item.system.cost === "36 gold", `price scaled (got ${item.system.cost})`);
 check(item.system.itemDescription.startsWith("<p>Book text.</p>") && item.system.itemDescription.includes("Sturdy") && !item.system.itemDescription.includes("Subtle"), "visible tags for players");
 check(item.system.gmDescription.includes("Subtle"), "hidden tag for the GM");
 check(!("_id" in item) && item.flags["gear-forge"].tags.length === 3, "fresh item with tag flags");
@@ -116,6 +130,23 @@ check(!("_id" in item) && item.flags["gear-forge"].tags.length === 3, "fresh ite
 await app.constructor.onPost.call(app);
 check(posted[0].content.includes("Sturdy") && !posted[0].content.includes("Subtle"), "chat card hides hidden tags");
 
+// Magic: "Enchanted" rolls its enchantment; Curse rolls a drawback that pays for another.
+await app.constructor.onAdd.call(app);
+const names = () => app.gf.tags.map((t) => t.name).join();
+check(names() === "Sturdy,Subtle,Long,Enchanted,Keen Edge", `Enchanted rolled a spell: ${names()}`);
+check(app.gf.tags[4].parent === app.gf.tags[3].id && app.lastHTML.includes("Magical · Unique"), "spell is the child; price is Unique");
+await app.constructor.onCurse.call(app);
+check(names().endsWith("Death Wish,Unbreakable"), `drawback paid for an enchantment: ${names()}`);
+await app.constructor.onReroll.call(app, null, { dataset: { index: "3" } });
+check(!names().includes("Keen Edge") && !names().includes("Enchanted,Keen"), `rerolling Enchanted drops its spell: ${names()}`);
+await app.constructor.onRemove.call(app, null, { dataset: { index: String(app.gf.tags.findIndex((t) => t.name === "Death Wish")) } });
+check(!names().includes("Death Wish") && !names().includes("Unbreakable"), `removing the drawback removes what it paid for: ${names()}`);
+await app.constructor.onEnchant.call(app);
+await app.constructor.onCreate.call(app);
+const magicItem = created.at(-1);
+check(magicItem.system.supply === "unique" && magicItem.system.cost === "", "enchanted item is Unique, no price");
+check(magicItem.system.gmDescription.includes("Unique"), "unique noted for the GM");
+
 // Without a base: named armour, no icon → text-only painting.
 app.constructor.onClearBase.call(app);
 app.gf.kind = "armour"; app.gf.baseName = "chainmail";
@@ -123,7 +154,9 @@ await app.constructor.onRoll.call(app);
 await app.constructor.onPaint.call(app);
 check(falModel === "fal-ai/gpt-image-1.5" && !("image_urls" in falBody), "text-only painting without an icon");
 await app.constructor.onCreate.call(app);
-check(created[1].type === "armor" && created[1].name.startsWith("chainmail"), "armour created from a name");
+check(created.at(-1).type === "armor" && created.at(-1).name.startsWith("chainmail"), "armour created from a name");
+await app.constructor.onEnchant.call(app);
+check(app.gf.tags.at(-1).name === "Supple Armor", "armour enchants from the armour table");
 
 check(errors.length === 0, `no errors: ${errors.join(" | ")}`);
 console.log("smoke test passed");
