@@ -1,0 +1,62 @@
+{
+  "id": "gear-forge",
+  "title": "Gear Forge",
+  "description": "A d100 weapon tag table plus d20 shield and armour tables, for rolling up gear with a story. Written for Dragonbane; the 'what it is' half of every tag works in any system.",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "name": "Captain Kabello"
+    }
+  ],
+  "url": "https://github.com/Kabellosan/gear-forge",
+  "manifest": "https://raw.githubusercontent.com/Kabellosan/gear-forge/main/module.json",
+  "download": "https://raw.githubusercontent.com/Kabellosan/gear-forge/main/releases/gear-forge-1.0.0.zip",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "14"
+  },
+  "packs": [
+    {
+      "name": "tag-tables",
+      "label": "Gear Forge — Tables",
+      "path": "packs/tag-tables",
+      "type": "RollTable",
+      "ownership": {
+        "PLAYER": "NONE",
+        "ASSISTANT": "OWNER"
+      }
+    },
+    {
+      "name": "tag-rules",
+      "label": "Gear Forge — Rules",
+      "path": "packs/tag-rules",
+      "type": "JournalEntry",
+      "ownership": {
+        "PLAYER": "OBSERVER",
+        "ASSISTANT": "OWNER"
+      }
+    },
+    {
+      "name": "tag-macros",
+      "label": "Gear Forge — Macros",
+      "path": "packs/tag-macros",
+      "type": "Macro",
+      "ownership": {
+        "PLAYER": "NONE",
+        "ASSISTANT": "OWNER"
+      }
+    }
+  ],
+  "packFolders": [
+    {
+      "name": "Gear Forge",
+      "sorting": "m",
+      "color": "#5a3a1a",
+      "packs": [
+        "tag-tables",
+        "tag-rules",
+        "tag-macros"
+      ]
+    }
+  ]
+}
