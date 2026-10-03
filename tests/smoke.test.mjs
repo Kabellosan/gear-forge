@@ -133,6 +133,7 @@ check(app.gf.suggestions.length === 2 && app.lastHTML.includes("Greyfang") && ap
 check(falBody.system_prompt.includes("no gunpowder"), "setting guide sent");
 await app.constructor.onPick.call(app, null, { dataset: { index: "0" } });
 check(app.gf.name === "Greyfang" && app.gf.description.startsWith("A long blade") && app.lastHTML.includes("notched by old wars.</textarea>"), "picked suggestion fills name and description");
+check(app.gf.suggestions.length === 0 && !app.lastHTML.includes("gf-suggestions") && app.lastHTML.includes('class="gf-result"'), "suggestions fold away after a pick");
 app.gf.tags[1].hidden = false;
 await app.constructor.onPaint.call(app);
 check(falCalls === 3 && falBody.prompt.includes('"Greyfang"') && falBody.prompt.includes("notched by old wars"), "painting follows the picked name and description");

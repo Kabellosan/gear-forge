@@ -16,6 +16,7 @@ Foundry VTT module for Captain's Dragonbane campaign. Tag tables for rolling up 
 - **Suggestions must fit the Vale** (Captain, 2026-10-03: no "Pulsar Raygun" from ranged tags). `WRITE_SETTING` in lib.mjs is an original setting guide (tone, peoples, medieval tech, how ranged and magic features read, folk naming patterns with invented examples; no Free League prose, the repo is public). The *Writing direction* setting appends campaign notes. The guide describes naming patterns without example names (the model copied "Mudwhistle", "Grandmother's Cleaver" verbatim on the first live test). `ANACHRONISM` drops any option with sci-fi/modern words before the GM sees it; widen that list rather than loosen the guide.
 - **The prompt gets each tag's *what it is* (or its name), never the Dragonbane rule**, so rules text doesn't end up painted.
 - **Only simple, unambiguous tags change stats** (`EFFECTS` in lib.mjs: STR, Durability, damage step, system features like long/subtle/toppling/thrown/noparry/mounted, armour rating and bonuses). Everything else goes into the description for the GM to run.
+- **The window stays compact** (Captain, 2026-10-03: it "no longer really fits"). Picture (112 px; the base icon dimmed until painted) sits beside Name + Description; suggestions fold away once one is picked; the window re-fits its height on every render.
 - **Hidden tags** (eye toggle) go to `gmDescription`, visible ones to `itemDescription`; chat cards show visible tags only.
 - **No copyrighted art in this repo.** Captain's reference icons (from the purchased Dragonbane module) live in `private/refs/` (gitignored); for Foundry they go in a secret gist or world folder.
 - **fal key falls back to Face Forge's, then Terrain Forge's.** GM-only, no socket relay (players never forge).
@@ -42,7 +43,7 @@ Item types: `weapon` (shields are weapons with feature `shield`), `armor`, `helm
 
 Foundry v14 on Sqyre (installs by manifest URL only; zip needs module.json at the root). Dragonbane system 4.1.1.
 
-## Open threads (as of v1.3.3)
+## Open threads (as of v1.3.4)
 
 - Suggest and text-only painting ran live on 2026-10-03 (v1.3.1). Borrowed-icon painting (v1.3.2) and the compendium index (pack `packageName` matching /dragonbane/) are not yet confirmed live.
 - Otherwise mock-tested only: the Forge window, drop handling, `table.roll()` in v14, and the sidebar/context/sheet entry points are mock-tested only.

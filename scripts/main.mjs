@@ -506,9 +506,11 @@ class GearForgeApp extends ApplicationV2 {
         <a data-action="remove" data-index="${i}" title="Remove"><i class="fa-solid fa-trash"></i></a>
       </li>`).join("");
 
+    const shown = s.image ?? (L.usableIcon(s.base?.img) ? s.base.img : null);
     const art = s.busy === "paint"
       ? `<div class="gf-art gf-wait"><i class="fa-solid fa-paintbrush fa-beat-fade"></i></div>`
-      : s.image ? `<div class="gf-art"><img src="${s.image}" alt=""></div>` : "";
+      : shown ? `<div class="gf-art${s.image ? "" : " is-base"}"><img src="${shown}" alt="" title="${s.image ? "The painting" : "Base icon (not painted yet)"}"></div>`
+      : `<div class="gf-art is-empty"><i class="fa-solid fa-image"></i></div>`;
 
     const suggestions = s.suggestions.length ? `<ul class="gf-suggestions">${s.suggestions.map((o, i) => `
       <li><a data-action="pick" data-index="${i}" title="Use this name and description (you can still edit both)">
@@ -525,19 +527,29 @@ class GearForgeApp extends ApplicationV2 {
       </div>
       ${s.tags.length ? `<ul class="gf-tags">${tags}</ul>
         <p class="gf-summary">${unique ? `<strong>Magical · Unique</strong>: no market price` : `Net <strong>${L.signed(net)}</strong> · ${price ? `<strong>${price}</strong> (×${mult})` : `×${mult} book price`}`}</p>
-        <div class="gf-row gf-name">
-          <label>Name<input type="text" name="name" value="${L.escapeHTML(s.name)}"></label>
-          <button type="button" data-action="suggest" ${s.busy ? "disabled" : ""} title="Suggest names and descriptions from the visible tags (well under 1¢)"><i class="fa-solid fa-feather${s.busy === "suggest" ? " fa-beat-fade" : ""}"></i> ${s.suggestions.length ? "Suggest more" : "Suggest"}</button>
+        <div class="gf-result">
+          ${art}
+          <div class="gf-text">
+            <div class="gf-row gf-name">
+              <input type="text" name="name" value="${L.escapeHTML(s.name)}" placeholder="Name" aria-label="Name">
+              <button type="button" data-action="suggest" ${s.busy ? "disabled" : ""} title="Suggest names and descriptions from the visible tags (well under 1¢)"><i class="fa-solid fa-feather${s.busy === "suggest" ? " fa-beat-fade" : ""}"></i> Suggest</button>
+            </div>
+            <textarea name="description" rows="3" aria-label="Description" placeholder="Description (optional): goes on the item above the tags. Write your own or click Suggest.">${L.escapeHTML(s.description)}</textarea>
+          </div>
         </div>
-        ${suggestions}
-        <label>Description<textarea name="description" rows="3" placeholder="Optional: goes on the item above the tags. Write your own or click Suggest.">${L.escapeHTML(s.description)}</textarea></label>
-        ${art}` : ""}
+        ${suggestions}` : ""}
       <footer class="gf-footer">
         <span class="gf-status">${L.escapeHTML(s.status)}</span>
         ${painting && s.tags.length ? `<button type="button" data-action="paint" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-paintbrush"></i> ${s.image ? "Paint again" : "Paint it"} · ~$${cost.toFixed(2)}</button>` : ""}
         ${s.tags.length ? `<button type="button" data-action="post" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-comment"></i> Post</button>
         <button type="button" data-action="create" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-check"></i> Create item</button>` : ""}
       </footer>`;
+  }
+
+  /** Grow and shrink with the content (suggestions come and go); the width stays as the GM left it. */
+  _onRender(context, options) {
+    super._onRender?.(context, options);
+    this.setPosition?.({ height: "auto" });
   }
 
   _replaceHTML(result, content) {
@@ -675,7 +687,7 @@ class GearForgeApp extends ApplicationV2 {
     if (!o) return;
     if (o.name) Object.assign(s, { name: o.name, nameEdited: true });
     if (o.description) s.description = o.description;
-    s.picked = o;
+    Object.assign(s, { picked: o, suggestions: [] });
     s.status = "";
     return this.render();
   }
