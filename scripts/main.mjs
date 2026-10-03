@@ -405,7 +405,6 @@ async function postCard(s) {
     content: `<div class="gear-forge-card">
       ${img ? `<img src="${img}" alt="">` : ""}
       <h3>${L.escapeHTML(s.name || s.base?.name || s.baseName || "Forged gear")}</h3>
-      ${L.priceHTML(L.priceLabel(s.tags, s.base?.system?.cost))}
       ${L.flavourHTML(s.description)}
       ${shown.length ? `<ul>${shown.map(L.tagHTML).join("")}</ul>` : ""}
     </div>`

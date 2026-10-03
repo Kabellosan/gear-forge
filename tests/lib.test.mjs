@@ -60,8 +60,8 @@ has(L.describeTags([{ name: "Keen Edge", magic: true, rank: 1 }]).hidden, "Uniqu
 eq(L.priceLabel([{ points: 2 }], "12 silver"), "12 gold", "price label scales the cost");
 eq(L.priceLabel([{ points: 1 }], ""), "×3 book price", "no base cost, multiplier shown");
 eq(L.priceLabel([{ magic: true }], "12 silver"), "Unique · no market price", "magic is unique");
-has(L.describeTags(tags, { label: "6 silver" }).visible, "Price:</strong> 6 silver", "price leads the player description");
-lacks(L.describeTags(tags, { label: "6 silver" }).visible, "Net", "net stays GM-only");
+has(L.describeTags(tags, { label: "6 silver" }).hidden, "Price:</strong> 6 silver", "price leads the GM description");
+lacks(L.describeTags(tags, { label: "6 silver" }).visible, "Price", "players don't see the price");
 has(L.tagHTML({ name: "Keen Edge", magic: true, rank: 1 }), "rank 1", "rank shown");
 
 // Art prompt: looks, never rules; edit keeps the frame.

@@ -170,7 +170,7 @@ export function priceLabel(tags, baseCost) {
   return scaleCost(baseCost, mult) ?? `×${mult} book price`;
 }
 
-/** A price line that stands out, for item descriptions and chat cards. */
+/** A price line that stands out, at the top of the GM's half of the item description. */
 export function priceHTML(label) {
   return label ? `<p class="gf-price"><strong>Price:</strong> ${escapeHTML(label)}</p>` : "";
 }
@@ -181,8 +181,8 @@ export function describeTags(tags, { multiplier, price, label } = {}) {
   const footer = isUnique(tags) ? "<p><em>Magical · Unique: no market price.</em></p>"
     : multiplier === undefined ? "" : `<p><em>Net ${signed(netPoints(tags))} · ${price ?? `×${multiplier} book price`}</em></p>`;
   return {
-    visible: priceHTML(label) + (shown.length ? `<h3>Forged</h3><ul>${shown.map(tagHTML).join("")}</ul>` : ""),
-    hidden: (secret.length ? `<h3>Hidden tags</h3><ul>${secret.map(tagHTML).join("")}</ul>` : "") + footer
+    visible: shown.length ? `<h3>Forged</h3><ul>${shown.map(tagHTML).join("")}</ul>` : "",
+    hidden: priceHTML(label) + (secret.length ? `<h3>Hidden tags</h3><ul>${secret.map(tagHTML).join("")}</ul>` : "") + footer
   };
 }
 

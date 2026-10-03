@@ -142,7 +142,8 @@ check(falCalls === 3 && falBody.prompt.includes('"Greyfang"') && falBody.prompt.
 app.gf.tags[1].hidden = true;
 await app.constructor.onCreate.call(app);
 const item = created[0];
-check(item.name === "Greyfang" && item.system.itemDescription.includes("<p>A long blade with a thick spine, notched by old wars.</p><p class=\"gf-price\"><strong>Price:</strong> 36 gold</p><h3>Forged"), "written name, description and price on the item");
+check(item.name === "Greyfang" && item.system.itemDescription.includes("<p>A long blade with a thick spine, notched by old wars.</p><h3>Forged"), "written name and description on the item");
+check(item.system.gmDescription.startsWith('<p class="gf-price"><strong>Price:</strong> 36 gold</p>') && !item.system.itemDescription.includes("Price"), "price is GM-only");
 check(item.img === app.gf.image && item.folder === "folder1", "item uses the painting, in the Gear Forge folder");
 check(item.system.durability === 15 && item.system.features.includes("long") && item.system.features.includes("subtle"), "effects applied, hidden ones too");
 check(item.system.cost === "36 gold", `price scaled (got ${item.system.cost})`);
@@ -153,7 +154,7 @@ check(!("_id" in item) && item.flags["gear-forge"].tags.length === 3, "fresh ite
 // Post: hidden tags stay off the chat card.
 await app.constructor.onPost.call(app);
 check(posted[0].content.includes("notched by old wars"), "chat card has the description");
-check(posted[0].content.includes("<strong>Price:</strong> 36 gold"), "chat card shows the price");
+check(!posted[0].content.includes("Price") && !posted[0].content.includes("36 gold"), "chat card keeps the price from players");
 check(posted[0].content.includes("Sturdy") && !posted[0].content.includes("Subtle"), "chat card hides hidden tags");
 
 // Magic: "Enchanted" rolls its enchantment; Curse rolls a drawback that pays for another.
