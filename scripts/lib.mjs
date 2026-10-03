@@ -33,7 +33,6 @@ export const EFFECTS = {
   "Heavy Head": { damageStep: +1, str: +3, durability: -3 },
   "Pole-Mounted": { feature: ["long"], grip: "grip2h" },
   "Short Haft": { unfeature: ["long"], grip: "grip1h" },
-  "Throwing Balance": { feature: ["thrown"], damageStep: -1 },
   "Chain-Linked": { feature: ["toppling", "noparry"] },
   "Blunted Edge": { swap: ["slashing", "bludgeoning"] },
   "Broad Blade": { unfeature: ["piercing"], durability: +3 },
