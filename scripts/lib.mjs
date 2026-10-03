@@ -243,3 +243,57 @@ export function pickRefs(paths, max = MAX_REFS, rand = Math.random) {
   }
   return list.slice(0, max).sort();
 }
+
+/* Writing: a name and a short description from the tags (fal.ai's OpenRouter LLM endpoint). */
+
+export const WRITE_ENDPOINT = "openrouter/router";
+export const WRITE_MODEL = "anthropic/claude-haiku-4.5";
+
+const WRITE_SYSTEM =
+  "You name and describe gear for Dragonbane, a fantasy tabletop RPG with a gritty, folk-tale, slightly humorous tone. " +
+  "Write like an item card in a rulebook: concrete, sensory, a hint of history or who made it. " +
+  "Never state rules, numbers, dice or game mechanics; the rules are printed separately. " +
+  "Answer with JSON only: {\"options\":[{\"name\":\"…\",\"description\":\"…\"}, …]}.";
+
+/**
+ * The prompt for name/description suggestions. Only tags the players can see go in:
+ * a hidden flaw must not leak into the description they'll read.
+ */
+export function writePrompt({ kind, baseName, tags, count = 3 }) {
+  const lines = tags.filter((t) => !t.hidden && !t.special).map((t) => {
+    const label = t.magic ? (t.drawback ? "curse" : "enchantment") : (t.points ?? 0) < 0 ? "flaw" : "feature";
+    return `- ${t.name} (${label})${t.what ? `: ${t.what.replace(/\.$/, "")}` : ""}`;
+  });
+  const item = String(baseName ?? "").trim() || kind || "weapon";
+  return {
+    system_prompt: WRITE_SYSTEM,
+    prompt: [
+      `Base item: ${item} (${kind}).`,
+      lines.length ? `What sets this one apart:\n${lines.join("\n")}` : "Nothing special sets it apart.",
+      `Give ${count} different options. Each name is 1–4 words: an evocative name, a maker's mark, or "the X of Y"; not just the base item's name. ` +
+      "Each description is 1–2 sentences, under 45 words, and works the features into what the item looks and feels like."
+    ].join("\n\n")
+  };
+}
+
+/** Request body for fal.ai's OpenRouter endpoint. */
+export function writeRequest({ prompt, system_prompt, model }) {
+  return { prompt, system_prompt, model: (model ?? "").trim() || WRITE_MODEL, temperature: 1, max_tokens: 600 };
+}
+
+/** The options out of the model's answer: tolerates code fences and chatter around the JSON. */
+export function parseSuggestions(output) {
+  const text = String(output ?? "");
+  const start = text.indexOf("{"), end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) return [];
+  let data;
+  try { data = JSON.parse(text.slice(start, end + 1)); } catch { return []; }
+  const list = Array.isArray(data) ? data : Array.isArray(data?.options) ? data.options : [data];
+  return list.map((o) => ({ name: String(o?.name ?? "").trim(), description: String(o?.description ?? "").trim() }))
+    .filter((o) => o.name || o.description).slice(0, 5);
+}
+
+/** The written description as HTML for the item: plain paragraphs, escaped. */
+export function flavourHTML(text) {
+  return String(text ?? "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${escapeHTML(p)}</p>`).join("");
+}

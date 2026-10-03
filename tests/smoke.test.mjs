@@ -38,6 +38,7 @@ let falCalls = 0, falBody = null, falModel = null;
 globalThis.fetch = async (url, opts) => {
   if (String(url).startsWith("https://fal.run/")) {
     falCalls++; falModel = url.slice("https://fal.run/".length); falBody = JSON.parse(opts.body);
+    if (falModel === "openrouter/router") return { ok: true, json: async () => ({ output: '```json\n{"options":[{"name":"Greyfang","description":"A long blade with a thick spine, notched by old wars."},{"name":"Widow\'s Reach","description":"Its haft is wrapped in faded red cord."}]}\n```' }) };
     return { ok: true, json: async () => ({ images: [{ url: "data:image/png;base64,1" }] }) };
   }
   return { ok: true, blob: async () => new Blob(["x"], { type: "image/webp" }) };
@@ -66,7 +67,7 @@ const table = (kind) => ({ flags: { "gear-forge": { kind } }, roll: async () => 
   return { roll: { total: rolls }, results: [seq[i % seq.length]] };
 } });
 const settings = { "gear-forge.paint": false, "gear-forge.quality": "medium", "gear-forge.falKey": "", "gear-forge.endpoint": "https://fal.run",
-  "gear-forge.styleLink": "", "gear-forge.styleFolder": "", "gear-forge.style": "", "face-forge.falKey": "ff-key" };
+  "gear-forge.styleLink": "", "gear-forge.styleFolder": "", "gear-forge.style": "", "gear-forge.writeModel": "", "face-forge.falKey": "ff-key" };
 const created = [];
 const longsword = {
   uuid: "Compendium.dragonbane-core.items.Item.ls", name: "Longsword", type: "weapon", img: "modules/dragonbane-core/icons/longsword.webp",
@@ -115,10 +116,21 @@ check(falBody.image_urls.length === 1 && falBody.num_images === 1, "base icon se
 check(falBody.prompt.includes("Longsword") && falBody.prompt.includes("Thick spine") && !falBody.prompt.includes("Durability"), "prompt has looks, not rules");
 check(app.gf.image?.startsWith("worlds/vale/gear-forge/") && uploads.length === 1, "image uploaded");
 
+// Suggest a name: one call, hidden tags and rules stay out; picking fills name and description.
+app.gf.tags[1].hidden = true;
+await app.constructor.onSuggest.call(app);
+check(falCalls === 2 && falModel === "openrouter/router" && falBody.model === "anthropic/claude-haiku-4.5", "one writing call");
+check(falBody.prompt.includes("Thick spine") && !falBody.prompt.includes("Subtle") && !falBody.prompt.includes("Durability"), "writing prompt: visible looks only, no rules");
+check(app.gf.suggestions.length === 2 && app.lastHTML.includes("Greyfang") && app.gf.name === "Longsword (Sturdy)", "suggestions shown, nothing applied yet");
+await app.constructor.onPick.call(app, null, { dataset: { index: "0" } });
+check(app.gf.name === "Greyfang" && app.gf.description.startsWith("A long blade") && app.lastHTML.includes("notched by old wars.</textarea>"), "picked suggestion fills name and description");
+app.gf.tags[1].hidden = false;
+
 // Hide one tag, create the item.
 app.gf.tags[1].hidden = true;
 await app.constructor.onCreate.call(app);
 const item = created[0];
+check(item.name === "Greyfang" && item.system.itemDescription.includes("<p>A long blade with a thick spine, notched by old wars.</p><h3>Forged"), "written name and description on the item");
 check(item.img === app.gf.image && item.folder === "folder1", "item uses the painting, in the Gear Forge folder");
 check(item.system.durability === 15 && item.system.features.includes("long") && item.system.features.includes("subtle"), "effects applied, hidden ones too");
 check(item.system.cost === "36 gold", `price scaled (got ${item.system.cost})`);
@@ -128,6 +140,7 @@ check(!("_id" in item) && item.flags["gear-forge"].tags.length === 3, "fresh ite
 
 // Post: hidden tags stay off the chat card.
 await app.constructor.onPost.call(app);
+check(posted[0].content.includes("notched by old wars"), "chat card has the description");
 check(posted[0].content.includes("Sturdy") && !posted[0].content.includes("Subtle"), "chat card hides hidden tags");
 
 // Magic: "Enchanted" rolls its enchantment; Curse rolls a drawback that pays for another.

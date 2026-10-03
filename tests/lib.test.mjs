@@ -82,4 +82,27 @@ if (fs.existsSync(src)) {
   for (const n of Object.keys(L.EFFECTS)) if (!names.has(n)) throw new Error(`EFFECTS names "${n}", which no table has`);
 }
 
+// Writing: visible tags with their looks, never the rules; hidden flaws stay out.
+{
+  const tags = [
+    { name: "Sturdy", points: 1, what: "Thick spine.", rule: "Durability +3." },
+    { name: "Clumsy", points: -3, what: "In your way.", rule: "Bane on Evade.", hidden: true },
+    { name: "Enchanted", points: 0, what: "Something was bound into it.", special: { enchant: 1 } },
+    { name: "Keen Edge", magic: true, rank: 1, what: "", rule: "Armour one step lower." }
+  ];
+  const ask = L.writePrompt({ kind: "weapon", baseName: "Longsword", tags });
+  has(ask.prompt, "Longsword (weapon)", "base item in the prompt");
+  has(ask.prompt, "- Sturdy (feature): Thick spine\n- Keen Edge (enchantment)", "visible tags with looks");
+  for (const bad of ["Clumsy", "In your way", "Durability", "Armour one step", "Enchanted ("]) lacks(ask.prompt, bad, "no hidden tags, rules or roll-on markers");
+  has(ask.system_prompt, "JSON", "asks for JSON");
+  eq(L.writeRequest({ ...ask, model: " " }).model, L.WRITE_MODEL, "default writing model");
+  eq(L.writeRequest({ ...ask, model: "google/gemini-2.5-flash" }).model, "google/gemini-2.5-flash", "chosen writing model");
+}
+eq(L.parseSuggestions('Sure!\n```json\n{"options":[{"name":" Greyfang ","description":"Old."},{"name":"","description":""}]}\n```'),
+  [{ name: "Greyfang", description: "Old." }], "suggestions out of a fenced answer");
+eq(L.parseSuggestions('{"name":"Solo","description":"One."}'), [{ name: "Solo", description: "One." }], "a single object");
+eq([L.parseSuggestions("no json here"), L.parseSuggestions("{broken")], [[], []], "junk gives nothing");
+eq(L.flavourHTML("A <b>blade</b>.\n\nSecond."), "<p>A &lt;b&gt;blade&lt;/b&gt;.</p><p>Second.</p>", "description as escaped paragraphs");
+eq(L.flavourHTML("  "), "", "empty description adds nothing");
+
 console.log("lib tests passed");

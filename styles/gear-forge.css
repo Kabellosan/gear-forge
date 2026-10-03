@@ -19,6 +19,12 @@
 .gear-forge .gf-tag { flex: 1; }
 .gear-forge .gf-tag small { display: block; opacity: 0.85; }
 .gear-forge .gf-summary { margin: 0; }
+.gear-forge .gf-name label { flex: 1; }
+.gear-forge .gf-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.gear-forge .gf-suggestions a { display: block; cursor: pointer; padding: 0.35rem 0.5rem; border-radius: 4px; background: rgba(90, 110, 160, 0.12); }
+.gear-forge .gf-suggestions a:hover { background: rgba(90, 110, 160, 0.25); }
+.gear-forge .gf-suggestions span { display: block; font-size: 0.9em; opacity: 0.85; }
+.gear-forge textarea { font-weight: normal; resize: vertical; }
 .gear-forge .gf-art { align-self: center; width: 256px; height: 256px; display: flex; align-items: center; justify-content: center; }
 .gear-forge .gf-art img { width: 100%; height: 100%; border: none; }
 .gear-forge .gf-wait { font-size: 2.5rem; opacity: 0.6; background: rgba(0, 0, 0, 0.2); border-radius: 6px; }

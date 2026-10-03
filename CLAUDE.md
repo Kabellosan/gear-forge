@@ -12,6 +12,7 @@ Foundry VTT module for Captain's Dragonbane campaign. Tag tables for rolling up 
 - **Ids are hashed from names**, so rebuilds keep links; renaming a tag changes its id. `tests/lib.test.mjs` fails if an `EFFECTS` key no longer matches a tag name.
 - **Painting is off by default and only happens on a click** (Captain: don't burn dollars on random loot). Rolling never calls fal.ai; the Paint button only renders when the *Paint gear* setting is on, and shows its cost.
 - **Repaint the base item's own icon.** The Dragonbane core module's item icons share one frame and parchment, so a GPT Image 1.5 `/edit` of the base icon keeps the look for about 6¢ (1 input image). No icon (typed base name, or an SVG placeholder) → style references from a secret gist / world folder, else text-only with `DEFAULT_STYLE`.
+- **Names and descriptions are suggested, never applied** (Captain, 2026-10-03: "a bot could look at the tags and come up with a name or a small description"). *Suggest* calls fal.ai's `openrouter/router` (an OpenRouter LLM proxy) with the same fal key, so no second provider or key; default model Claude Haiku 4.5, changeable in *Writing model*. One request returns three options; a click fills the Name and Description fields. Only visible tags go in (hidden flaws must not leak into player text) and never the rules. The description lands in `itemDescription` above the Forged list and on the chat card. A picked name/description is dropped on a new roll or base unless the GM edited it.
 - **The prompt gets each tag's *what it is* (or its name), never the Dragonbane rule**, so rules text doesn't end up painted.
 - **Only simple, unambiguous tags change stats** (`EFFECTS` in lib.mjs: STR, Durability, damage step, system features like long/subtle/toppling/thrown/noparry/mounted, armour rating and bonuses). Everything else goes into the description for the GM to run.
 - **Hidden tags** (eye toggle) go to `gmDescription`, visible ones to `itemDescription`; chat cards show visible tags only.
@@ -40,8 +41,8 @@ Item types: `weapon` (shields are weapons with feature `shield`), `armor`, `helm
 
 Foundry v14 on Sqyre (installs by manifest URL only; zip needs module.json at the root). Dragonbane system 4.1.1.
 
-## Open threads (as of v1.2.0)
+## Open threads (as of v1.3.0)
 
-- Nothing run on real Foundry yet: the Forge window, drop handling, `table.roll()` in v14, and the sidebar/context/sheet entry points are mock-tested only.
+- Nothing run on real Foundry yet (the Suggest call to `openrouter/router` included): the Forge window, drop handling, `table.roll()` in v14, and the sidebar/context/sheet entry points are mock-tested only.
 - Repainting 64–128 px icons: unknown how well GPT keeps the frame from such small inputs (they're upscaled to 512 before sending). If it drifts, composite a blank frame instead (like Face Forge's ring).
 - Shield/armour tags have no *what it is* column in the note, so their prompts use tag names. Add a looks column if their art comes out muddy.
