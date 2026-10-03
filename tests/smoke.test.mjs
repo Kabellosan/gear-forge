@@ -76,7 +76,14 @@ const longsword = {
 globalThis.game = {
   user: { isGM: true }, world: { id: "vale" }, system: { id: "dragonbane" },
   modules: new Map([["gear-forge", {}]]),
-  packs: new Map([["gear-forge.tag-tables", { getDocuments: async () => Object.keys(sequences).map(table) }]]),
+  packs: new Map([
+    ["gear-forge.tag-tables", { getDocuments: async () => Object.keys(sequences).map(table) }],
+    ["dragonbane-core.items", { documentName: "Item", collection: "dragonbane-core.items", metadata: { packageName: "dragonbane-core" }, getIndex: async () => [
+      { name: "Chainmail", type: "armor", img: "modules/dragonbane-core/art/chainmail.webp" },
+      { name: "Leather Armor", type: "armor", img: "modules/dragonbane-core/art/leather.webp" },
+      { name: "Dagger", type: "weapon", img: "modules/dragonbane-core/art/dagger.webp", system: { features: ["piercing"] } }
+    ] }]
+  ]),
   settings: { register() {}, get: (m, k) => { const v = settings[`${m}.${k}`]; if (v === undefined) throw new Error(`no setting ${m}.${k}`); return v; } },
   folders: { find: () => null }
 };
@@ -168,7 +175,7 @@ app.constructor.onClearBase.call(app);
 app.gf.kind = "armour"; app.gf.baseName = "chainmail";
 await app.constructor.onRoll.call(app);
 await app.constructor.onPaint.call(app);
-check(falModel === "fal-ai/gpt-image-1.5" && !("image_urls" in falBody), "text-only painting without an icon");
+check(falModel === "fal-ai/gpt-image-1.5/edit" && falBody.image_urls.length === 1 && falBody.prompt.startsWith("Paint a new item into this icon: a chainmail"), "no base icon: paints into the matching compendium icon");
 await app.constructor.onCreate.call(app);
 check(created.at(-1).type === "armor" && created.at(-1).name.startsWith("chainmail"), "armour created from a name");
 await app.constructor.onEnchant.call(app);

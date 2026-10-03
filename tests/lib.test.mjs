@@ -71,6 +71,19 @@ has(L.artPrompt({ baseName: "Shield", tags: [{ name: "Hooked Rim" }], editing: f
   lacks(L.artPrompt({ baseName: "Longsword", tags, editing: false, name: "Longsword", description: "Plain." }), "known as", "no name line when it's just the base name");
   lacks(L.artPrompt({ baseName: "Longsword", tags, editing: true, name: "Greyfang" }), "Greyfang", "name alone adds nothing");
 }
+{
+  const icons = [{ name: "Chainmail", img: "a/chainmail.webp", kind: "armour" }, { name: "Leather Armor", img: "a/leather.webp", kind: "armour" },
+    { name: "Hand Axe", img: "a/axe.webp", kind: "weapon" }, { name: "Battle Axe", img: "icons/svg/axe.svg", kind: "weapon" }, { name: "Dagger", img: "a/dagger.webp", kind: "weapon" }];
+  eq(L.pickIcon(icons, "armour", "rusty chainmail shirt").name, "Chainmail", "closest name wins");
+  eq(L.pickIcon(icons, "weapon", "battle axe", () => 0).name, "Hand Axe", "SVG placeholders skipped; shared word wins");
+  eq(L.pickIcon(icons, "weapon", "", () => 0.99).name, "Dagger", "no name: any of the kind");
+  eq(L.pickIcon(icons, "shield", "buckler"), null, "nothing of the kind");
+  const borrowed = L.artPrompt({ baseName: "Fishing hook", tags, editing: false, borrowed: true });
+  has(borrowed, "Paint a new item into this icon: a Fishing hook: Thick spine", "borrowed icon prompt");
+  has(borrowed, "Replace the object completely", "replace the borrowed object");
+  for (const p of [borrowed, L.artPrompt({ baseName: "Axe", tags, editing: true }), L.artPrompt({ baseName: "Axe", tags, editing: false })]) has(p, "not a photograph", "never photographic");
+  lacks(L.writePrompt({ kind: "weapon", baseName: "Axe", tags: [] }).system_prompt, "Mudwhistle", "no example names to copy");
+}
 const magicPrompt = L.artPrompt({ baseName: "Axe", tags: [{ name: "Enchanted", what: "Something was bound", special: { enchant: 1 } }, { name: "Keen Edge", magic: true }, { name: "Death Wish", magic: true, drawback: true }], editing: true });
 has(magicPrompt, "magical runes", "magic shows as runes"); lacks(magicPrompt, "Death Wish", "drawbacks not painted"); lacks(magicPrompt, "Something was bound", "pointer tags not painted");
 eq([L.usableIcon("icons/svg/sword.svg"), L.usableIcon("modules/x/longsword.webp"), L.usableIcon("")], [false, true, false], "usable icon");
