@@ -57,6 +57,11 @@ eq(L.suggestName("Longsword", tags), "Longsword (Sturdy)", "name");
 eq(L.suggestName("Club", [tags[1]]), "Club", "no virtue, no suffix");
 eq(L.suggestName("Axe", [...tags, { name: "Bane Weapon", magic: true, rank: 2 }]), "Axe (Bane Weapon)", "enchantment names it");
 has(L.describeTags([{ name: "Keen Edge", magic: true, rank: 1 }]).hidden, "Unique", "unique footer");
+eq(L.priceLabel([{ points: 2 }], "12 silver"), "12 gold", "price label scales the cost");
+eq(L.priceLabel([{ points: 1 }], ""), "×3 book price", "no base cost, multiplier shown");
+eq(L.priceLabel([{ magic: true }], "12 silver"), "Unique · no market price", "magic is unique");
+has(L.describeTags(tags, { label: "6 silver" }).visible, "Price:</strong> 6 silver", "price leads the player description");
+lacks(L.describeTags(tags, { label: "6 silver" }).visible, "Net", "net stays GM-only");
 has(L.tagHTML({ name: "Keen Edge", magic: true, rank: 1 }), "rank 1", "rank shown");
 
 // Art prompt: looks, never rules; edit keeps the frame.

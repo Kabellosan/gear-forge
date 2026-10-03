@@ -163,13 +163,25 @@ export function tagHTML(tag) {
  * The HTML added to the item: visible tags for everyone, hidden ones (flaws the heroes
  * haven't found yet) for the GM. Returns { visible, hidden }; either may be "".
  */
-export function describeTags(tags, { multiplier, price } = {}) {
+/** What players see as the price: the scaled cost, "×3 book price" when the base has none, or Unique. */
+export function priceLabel(tags, baseCost) {
+  if (isUnique(tags)) return "Unique · no market price";
+  const mult = priceMultiplier(netPoints(tags));
+  return scaleCost(baseCost, mult) ?? `×${mult} book price`;
+}
+
+/** A price line that stands out, for item descriptions and chat cards. */
+export function priceHTML(label) {
+  return label ? `<p class="gf-price"><strong>Price:</strong> ${escapeHTML(label)}</p>` : "";
+}
+
+export function describeTags(tags, { multiplier, price, label } = {}) {
   const shown = tags.filter((t) => !t.hidden);
   const secret = tags.filter((t) => t.hidden);
   const footer = isUnique(tags) ? "<p><em>Magical · Unique: no market price.</em></p>"
     : multiplier === undefined ? "" : `<p><em>Net ${signed(netPoints(tags))} · ${price ?? `×${multiplier} book price`}</em></p>`;
   return {
-    visible: shown.length ? `<h3>Forged</h3><ul>${shown.map(tagHTML).join("")}</ul>` : "",
+    visible: priceHTML(label) + (shown.length ? `<h3>Forged</h3><ul>${shown.map(tagHTML).join("")}</ul>` : ""),
     hidden: (secret.length ? `<h3>Hidden tags</h3><ul>${secret.map(tagHTML).join("")}</ul>` : "") + footer
   };
 }

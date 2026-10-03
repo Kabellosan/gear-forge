@@ -379,10 +379,11 @@ async function createItem(s) {
   if (s.image) data.img = s.image;
   data.system = data.system ?? {};
   Object.assign(data.system, L.applyEffects(data.system, tags));
+  const label = L.priceLabel(tags, data.system.cost);
   const price = unique ? null : L.scaleCost(data.system.cost, mult);
   if (price) data.system.cost = price;
   if (unique && game.system.id === "dragonbane") Object.assign(data.system, { cost: "", supply: "unique" });
-  const text = L.describeTags(tags, { multiplier: mult, price: price ? `${price} (×${mult})` : undefined });
+  const text = L.describeTags(tags, { multiplier: mult, price: price ? `${price} (×${mult})` : undefined, label });
   text.visible = L.flavourHTML(s.description) + text.visible;
   if ("itemDescription" in data.system || game.system.id === "dragonbane") {
     data.system.itemDescription = appendHTML(data.system.itemDescription, text.visible);
@@ -404,6 +405,7 @@ async function postCard(s) {
     content: `<div class="gear-forge-card">
       ${img ? `<img src="${img}" alt="">` : ""}
       <h3>${L.escapeHTML(s.name || s.base?.name || s.baseName || "Forged gear")}</h3>
+      ${L.priceHTML(L.priceLabel(s.tags, s.base?.system?.cost))}
       ${L.flavourHTML(s.description)}
       ${shown.length ? `<ul>${shown.map(L.tagHTML).join("")}</ul>` : ""}
     </div>`
@@ -526,7 +528,7 @@ class GearForgeApp extends ApplicationV2 {
         <button type="button" data-action="curse" ${s.busy ? "disabled" : ""} title="Roll a drawback; it pays for one enchantment"><i class="fa-solid fa-skull"></i> Curse</button>
       </div>
       ${s.tags.length ? `<ul class="gf-tags">${tags}</ul>
-        <p class="gf-summary">${unique ? `<strong>Magical · Unique</strong>: no market price` : `Net <strong>${L.signed(net)}</strong> · ${price ? `<strong>${price}</strong> (×${mult})` : `×${mult} book price`}`}</p>
+        <p class="gf-summary">${unique ? `<span class="gf-price-tag">Unique</span> Magical: no market price` : `<span class="gf-price-tag">${price ?? `×${mult} book price`}</span> Net ${L.signed(net)}${price ? ` · ×${mult} book price` : ""}`}</p>
         <div class="gf-result">
           ${art}
           <div class="gf-text">
