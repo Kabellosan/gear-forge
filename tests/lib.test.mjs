@@ -39,7 +39,13 @@ eq(L.applyEffects({ rating: 4, bonuses: [] }, [{ name: "Epic Armor" }, { name: "
 eq(L.applyEffects({}, [{ name: "Sturdy" }]), {}, "no system data, no changes");
 
 // Price.
-eq([1, 2, 3, 4, 5, 0, -1, -2, -6].map(L.priceMultiplier), [3, 10, 30, 100, 300, 1, 0.5, 0.25, 0.25], "multipliers (RAW Mastercrafted = +2 = ×10)");
+eq([1, 2, 3, 4, 5, 6, 0, -1, -2, -3, -6].map(L.priceMultiplier), [3, 10, 30, 100, 100, 100, 1, 0.5, 0.25, 0.1, 0.1], "multipliers (RAW Mastercrafted = +2 = ×10, capped at ×100, ×⅒ for scrap)");
+eq(L.scaleCost("12 silver", 0.1), "12 copper", "a tenth of the price");
+eq([0.5, 0.25, 0.1, 3].map(L.multText), ["×½", "×¼", "×⅒", "×3"], "multiplier text");
+{ const seq = [0, 0.099, 0.1, 0.5, 0.999]; let i = 0;
+  eq(seq.map(() => L.rollTagCount(() => seq[i++])), [1, 1, 2, 3, 10], "weighted tag count"); }
+{ const c = Array(11).fill(0); for (let i = 0; i < 1000; i++) c[L.rollTagCount((() => i / 1000))]++;
+  eq([c[1], c[3], c[10]], [100, 300, 10], "tag count weights 10/30/1 per hundred"); }
 eq([L.scaleCost("25 gold", 10), L.scaleCost("5 silver", 3), L.scaleCost("3 silver", 0.25), L.scaleCost("?", 2)],
   ["250 gold", "15 silver", "8 copper", null], "scaled cost");
 eq(L.netPoints([{ points: 1 }, { points: 2, magic: true }, { points: -1 }]), 0, "magic tags don't count toward net");
@@ -50,7 +56,7 @@ const tags = [
   { name: "Sturdy", points: 1, what: "Thick spine.", rule: "Durability +3." },
   { name: "Accursed", points: -3, what: "It wants blood.", rule: "WIL roll.", hidden: true }
 ];
-const d = L.describeTags(tags, { multiplier: 0.5, price: "6 silver (×0.5)" });
+const d = L.describeTags(tags, { baseCost: "12 silver", priced: true });
 has(d.visible, "Sturdy", "visible tag"); lacks(d.visible, "Accursed", "hidden tag stays hidden");
 has(d.hidden, "Accursed", "gm sees hidden"); has(d.hidden, "Net −2", "net in gm half");
 eq(L.suggestName("Longsword", tags), "Longsword (Sturdy)", "name");
@@ -60,8 +66,10 @@ has(L.describeTags([{ name: "Keen Edge", magic: true, rank: 1 }]).hidden, "Uniqu
 eq(L.priceLabel([{ points: 2 }], "12 silver"), "12 gold", "price label scales the cost");
 eq(L.priceLabel([{ points: 1 }], ""), "×3 book price", "no base cost, multiplier shown");
 eq(L.priceLabel([{ magic: true }], "12 silver"), "Unique · no market price", "magic is unique");
-has(L.describeTags(tags, { label: "6 silver" }).hidden, "Price:</strong> 6 silver", "price leads the GM description");
-lacks(L.describeTags(tags, { label: "6 silver" }).visible, "Price", "players don't see the price");
+has(d.hidden, "Price:</strong> 36 silver <em>(really worth 3 silver, counting hidden tags)", "asks for the visible tags, GM sees the true worth");
+lacks(d.visible, "Price", "players don't see the price");
+lacks(L.describeTags([tags[0]], { baseCost: "12 silver", priced: true }).hidden, "really worth", "no hidden flaws, one price");
+eq(L.pricing(tags, "12 silver").asking.net, 1, "asking net ignores hidden tags");
 has(L.tagHTML({ name: "Keen Edge", magic: true, rank: 1 }), "rank 1", "rank shown");
 
 // Art prompt: looks, never rules; edit keeps the frame.

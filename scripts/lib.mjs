@@ -116,12 +116,25 @@ export const isUnique = (tags) => tags.some((t) => t.magic);
 
 /**
  * Price multiplier, anchored on RAW Mastercrafted (two improvements, ×10): ×√10 per point,
- * rounded to 3, 10, 30, 100… Flaws: ×½ for −1, ×¼ below that (no printed rule).
+ * rounded to 3, 10, 30, 100, and capped there (Captain, 2026-10-03: no ×1000 longswords).
+ * Flaws (no printed rule): ×½ for −1, ×¼ for −2, ×⅒ for −3 or worse (sold for scrap).
  */
 export function priceMultiplier(net) {
+  if (net >= 4) return 100;
   if (net > 0) return (net % 2 ? 3 : 1) * 10 ** Math.floor(net / 2);
   if (net === 0) return 1;
-  return net === -1 ? 0.5 : 0.25;
+  return net === -1 ? 0.5 : net === -2 ? 0.25 : 0.1;
+}
+
+/** The multiplier as people read it: ×3, ×½, ×¼, ×⅒. */
+export const multText = (m) => `×${{ 0.5: "½", 0.25: "¼", 0.1: "⅒" }[m] ?? m}`;
+
+/** Weighted number of tags to roll: 1–10, mostly 2–4 (Captain, 2026-10-03: "3 feels nice"). */
+export const TAG_COUNT_WEIGHTS = [10, 20, 30, 17, 10, 5, 3, 2, 2, 1];
+export function rollTagCount(random = Math.random) {
+  let r = random() * TAG_COUNT_WEIGHTS.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < TAG_COUNT_WEIGHTS.length; i++) if ((r -= TAG_COUNT_WEIGHTS[i]) < 0) return i + 1;
+  return TAG_COUNT_WEIGHTS.length;
 }
 
 const COIN = { gold: 100, gc: 100, silver: 10, sc: 10, copper: 1, cc: 1 };
@@ -163,26 +176,43 @@ export function tagHTML(tag) {
  * The HTML added to the item: visible tags for everyone, hidden ones (flaws the heroes
  * haven't found yet) for the GM. Returns { visible, hidden }; either may be "".
  */
-/** What players see as the price: the scaled cost, "×3 book price" when the base has none, or Unique. */
+/**
+ * The asking price comes from the visible tags only: a seller doesn't knock money off for a flaw
+ * nobody has found. The true worth counts hidden tags too. Both are for the GM.
+ * Returns { unique, asking, worth } with { net, mult, label } each.
+ */
+export function pricing(tags, baseCost) {
+  const one = (list) => {
+    const net = netPoints(list);
+    const mult = priceMultiplier(net);
+    return { net, mult, label: scaleCost(baseCost, mult) ?? `${multText(mult)} book price` };
+  };
+  return { unique: isUnique(tags), asking: one(tags.filter((t) => !t.hidden)), worth: one(tags) };
+}
+
+/** The asking price as a label: "36 gold", "×3 book price", or Unique. */
 export function priceLabel(tags, baseCost) {
-  if (isUnique(tags)) return "Unique · no market price";
-  const mult = priceMultiplier(netPoints(tags));
-  return scaleCost(baseCost, mult) ?? `×${mult} book price`;
+  const p = pricing(tags, baseCost);
+  return p.unique ? "Unique · no market price" : p.asking.label;
 }
 
 /** A price line that stands out, at the top of the GM's half of the item description. */
-export function priceHTML(label) {
-  return label ? `<p class="gf-price"><strong>Price:</strong> ${escapeHTML(label)}</p>` : "";
+export function priceHTML(p) {
+  if (!p) return "";
+  if (p.unique) return `<p class="gf-price"><strong>Price:</strong> Unique · no market price</p>`;
+  const worth = p.worth.label !== p.asking.label ? ` <em>(really worth ${escapeHTML(p.worth.label)}, counting hidden tags)</em>` : "";
+  return `<p class="gf-price"><strong>Price:</strong> ${escapeHTML(p.asking.label)}${worth}</p>`;
 }
 
-export function describeTags(tags, { multiplier, price, label } = {}) {
+export function describeTags(tags, { baseCost, priced = false } = {}) {
   const shown = tags.filter((t) => !t.hidden);
   const secret = tags.filter((t) => t.hidden);
-  const footer = isUnique(tags) ? "<p><em>Magical · Unique: no market price.</em></p>"
-    : multiplier === undefined ? "" : `<p><em>Net ${signed(netPoints(tags))} · ${price ?? `×${multiplier} book price`}</em></p>`;
+  const p = priced ? pricing(tags, baseCost) : null;
+  const footer = !p ? (isUnique(tags) ? "<p><em>Magical · Unique: no market price.</em></p>" : "")
+    : p.unique ? "" : `<p><em>Net ${signed(p.worth.net)} · ${multText(p.worth.mult)} book price</em></p>`;
   return {
     visible: shown.length ? `<h3>Forged</h3><ul>${shown.map(tagHTML).join("")}</ul>` : "",
-    hidden: priceHTML(label) + (secret.length ? `<h3>Hidden tags</h3><ul>${secret.map(tagHTML).join("")}</ul>` : "") + footer
+    hidden: priceHTML(p) + (secret.length ? `<h3>Hidden tags</h3><ul>${secret.map(tagHTML).join("")}</ul>` : "") + footer
   };
 }
 

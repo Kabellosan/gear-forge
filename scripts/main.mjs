@@ -364,7 +364,6 @@ function appendHTML(existing, extra) {
 
 async function createItem(s) {
   const tags = s.tags;
-  const mult = L.priceMultiplier(L.netPoints(tags));
   const unique = L.isUnique(tags);
   const data = s.base ? foundry.utils.deepClone(s.base) : {
     name: s.baseName || KINDS[s.kind],
@@ -379,12 +378,11 @@ async function createItem(s) {
   if (s.image) data.img = s.image;
   data.system = data.system ?? {};
   Object.assign(data.system, L.applyEffects(data.system, tags));
-  const label = L.priceLabel(tags, data.system.cost);
-  const price = unique ? null : L.scaleCost(data.system.cost, mult);
+  const baseCost = data.system.cost;
   // The price is GM-only: it goes in the GM description, and the sheet's cost field (players can read it) stays blank.
   if ("cost" in data.system || game.system.id === "dragonbane") data.system.cost = "";
   if (unique && game.system.id === "dragonbane") data.system.supply = "unique";
-  const text = L.describeTags(tags, { multiplier: mult, price: price ? `${price} (×${mult})` : undefined, label });
+  const text = L.describeTags(tags, { baseCost, priced: true });
   text.visible = L.flavourHTML(s.description) + text.visible;
   if ("itemDescription" in data.system || game.system.id === "dragonbane") {
     data.system.itemDescription = appendHTML(data.system.itemDescription, text.visible);
@@ -451,7 +449,7 @@ class GearForgeApp extends ApplicationV2 {
 
   constructor() {
     super();
-    this.gf = { base: null, baseUuid: null, baseName: "", kind: "weapon", count: 3, tags: [], name: "", nameEdited: false, description: "", suggestions: [], picked: null, image: null, busy: false, status: "" };
+    this.gf = { base: null, baseUuid: null, baseName: "", kind: "weapon", count: 0, tags: [], name: "", nameEdited: false, description: "", suggestions: [], picked: null, image: null, busy: false, status: "" };
   }
 
   setBase(item) {
@@ -479,10 +477,7 @@ class GearForgeApp extends ApplicationV2 {
 
   async _renderHTML() {
     const s = this.gf;
-    const net = L.netPoints(s.tags);
-    const mult = L.priceMultiplier(net);
-    const unique = L.isUnique(s.tags);
-    const price = L.scaleCost(s.base?.system?.cost, mult);
+    const p = L.pricing(s.tags, s.base?.system?.cost);
     const painting = game.settings.get(MOD, "paint");
     const cost = L.estimateCost(game.settings.get(MOD, "quality"), inputCount(s.base));
 
@@ -521,14 +516,16 @@ class GearForgeApp extends ApplicationV2 {
     return `
       ${base}
       <div class="gf-row">
-        <label class="gf-count">Tags <input type="number" name="count" value="${s.count}" min="1" max="6"></label>
+        <label class="gf-count">Tags <select name="count">${[["0", "Random"], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])]
+          .map(([v, t]) => `<option value="${v}" ${String(s.count) === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
         <button type="button" data-action="roll" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-dice-d20"></i> ${s.tags.length ? "Roll all again" : "Roll tags"}</button>
         <button type="button" data-action="add" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-plus"></i> One more</button>
         <button type="button" data-action="enchant" ${s.busy ? "disabled" : ""} title="Roll a Book of Magic enchantment"><i class="fa-solid fa-wand-sparkles"></i> Enchant</button>
         <button type="button" data-action="curse" ${s.busy ? "disabled" : ""} title="Roll a drawback; it pays for one enchantment"><i class="fa-solid fa-skull"></i> Curse</button>
       </div>
       ${s.tags.length ? `<ul class="gf-tags">${tags}</ul>
-        <p class="gf-summary">${unique ? `<span class="gf-price-tag">Unique</span> Magical: no market price` : `<span class="gf-price-tag">${price ?? `×${mult} book price`}</span> Net ${L.signed(net)}${price ? ` · ×${mult} book price` : ""}`}</p>
+        <p class="gf-summary">${p.unique ? `<span class="gf-price-tag">Unique</span> Magical: no market price`
+          : `<span class="gf-price-tag">${L.escapeHTML(p.asking.label)}</span> Net ${L.signed(p.asking.net)}${p.worth.label !== p.asking.label ? ` · <span title="Counting the hidden tags">really worth ${L.escapeHTML(p.worth.label)}</span>` : ""}`}</p>
         <div class="gf-result">
           ${art}
           <div class="gf-text">
@@ -558,7 +555,7 @@ class GearForgeApp extends ApplicationV2 {
     content.innerHTML = result;
     content.querySelectorAll("input, select, textarea").forEach((el) => el.addEventListener("change", () => {
       const s = this.gf;
-      if (el.name === "count") s.count = Math.clamp(Number(el.value) || 3, 1, 6);
+      if (el.name === "count") s.count = Math.clamp(Number(el.value) || 0, 0, 10);
       else if (el.name === "name") { s.name = el.value; s.nameEdited = !!el.value; }
       else if (el.name === "description") s.description = el.value;
       else if (el.name === "kind") { if (el.value !== s.kind) s.tags = []; s.kind = el.value; this.autoName(); this.render(); }
@@ -593,7 +590,8 @@ class GearForgeApp extends ApplicationV2 {
     await this.withBusy("roll", async () => {
       try {
         const tags = [];
-        for (let i = 0; i < s.count; i++) tags.push(...await rollExpanded(s.kind, s.kind));
+        const count = s.count || L.rollTagCount();
+        for (let i = 0; i < count; i++) tags.push(...await rollExpanded(s.kind, s.kind));
         Object.assign(s, { tags, image: null, status: "" });
         this.forgetWriting();
         this.autoName();
