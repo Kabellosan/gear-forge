@@ -101,6 +101,8 @@ const check = (ok, what) => { if (!ok) throw new Error(what); };
 // Open with a base item and roll three tags.
 const app = await api.open(longsword);
 check(app.lastHTML.includes("Longsword") && app.lastHTML.includes("2D8"), "base item shown");
+check(app.gf.count === 0 && app.lastHTML.includes('<option value="0" selected>Random</option>'), "tag count is random by default");
+app.gf.count = 3;
 await app.constructor.onRoll.call(app);
 check(app.gf.tags.map((t) => t.name).join() === "Sturdy,Subtle,Clumsy", "three tags rolled");
 check(app.lastHTML.includes("Net −1") && app.lastHTML.includes("6 silver"), "net and price shown (×½)");
@@ -143,7 +145,7 @@ app.gf.tags[1].hidden = true;
 await app.constructor.onCreate.call(app);
 const item = created[0];
 check(item.name === "Greyfang" && item.system.itemDescription.includes("<p>A long blade with a thick spine, notched by old wars.</p><h3>Forged"), "written name and description on the item");
-check(item.system.gmDescription.startsWith('<p class="gf-price"><strong>Price:</strong> 36 gold</p>') && !item.system.itemDescription.includes("Price"), "price is GM-only");
+check(item.system.gmDescription.startsWith('<p class="gf-price"><strong>Price:</strong> 12 gold <em>(really worth 36 gold, counting hidden tags)</em></p>') && !item.system.itemDescription.includes("Price"), "price is GM-only");
 check(item.img === app.gf.image && item.folder === "folder1", "item uses the painting, in the Gear Forge folder");
 check(item.system.durability === 15 && item.system.features.includes("long") && item.system.features.includes("subtle"), "effects applied, hidden ones too");
 check(item.system.cost === "", `cost field left blank for players (got ${item.system.cost})`);
@@ -154,7 +156,7 @@ check(!("_id" in item) && item.flags["gear-forge"].tags.length === 3, "fresh ite
 // Post: hidden tags stay off the chat card.
 await app.constructor.onPost.call(app);
 check(posted[0].content.includes("notched by old wars"), "chat card has the description");
-check(!posted[0].content.includes("Price") && !posted[0].content.includes("36 gold"), "chat card keeps the price from players");
+check(!posted[0].content.includes("Price") && !posted[0].content.includes("gold"), "chat card keeps the price from players");
 check(posted[0].content.includes("Sturdy") && !posted[0].content.includes("Subtle"), "chat card hides hidden tags");
 
 // Magic: "Enchanted" rolls its enchantment; Curse rolls a drawback that pays for another.
