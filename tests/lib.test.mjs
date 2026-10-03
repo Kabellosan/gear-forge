@@ -104,6 +104,16 @@ if (fs.existsSync(src)) {
   eq(L.writeRequest({ ...ask, model: " " }).model, L.WRITE_MODEL, "default writing model");
   eq(L.writeRequest({ ...ask, model: "google/gemini-2.5-flash" }).model, "google/gemini-2.5-flash", "chosen writing model");
 }
+// Setting guardrails: medieval tech, the GM's notes on top, off-setting answers dropped.
+{
+  const ask = L.writePrompt({ kind: "weapon", baseName: "Shortbow", tags: [], style: " Names in the Vale are Frisian-sounding. " });
+  for (const part of ["Dragonbane", "bows, crossbows, slings", "no gunpowder", "Campaign notes from the GM: Names in the Vale are Frisian-sounding.", "JSON only"]) has(ask.system_prompt, part, "setting guide");
+  lacks(L.writePrompt({ kind: "weapon", baseName: "Shortbow", tags: [] }).system_prompt, "Campaign notes", "no empty campaign notes");
+  has(ask.prompt, "never a firearm", "ranged features stay bows");
+  eq([{ name: "Pulsar Raygun", description: "Hums." }, { name: "Old Thorn", description: "A yew crossbow, its trigger worn smooth." }, { name: "The Cannon", description: "" },
+    { name: "Siege Splinter", description: "Steel and horn from a broken siege engine." }, { name: "Stormbow", description: "Arrows crackle with plasma." }].map(L.fitsSetting),
+    [false, true, false, true, false], "off-setting words only");
+}
 eq(L.parseSuggestions('Sure!\n```json\n{"options":[{"name":" Greyfang ","description":"Old."},{"name":"","description":""}]}\n```'),
   [{ name: "Greyfang", description: "Old." }], "suggestions out of a fenced answer");
 eq(L.parseSuggestions('{"name":"Solo","description":"One."}'), [{ name: "Solo", description: "One." }], "a single object");

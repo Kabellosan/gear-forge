@@ -36,6 +36,11 @@ Hooks.once("init", () => {
     hint: "Suggests names and descriptions from the tags, through fal.ai's OpenRouter endpoint (same key). Any OpenRouter model id; empty = Claude Haiku 4.5, well under 1¢ a click.",
     scope: "world", config: true, restricted: true, type: String, default: ""
   });
+  game.settings.register(MOD, "writeStyle", {
+    name: "Writing direction",
+    hint: "Optional campaign notes for Suggest: places, peoples, naming habits, tone. Added on top of the built-in Dragonbane setting guide.",
+    scope: "world", config: true, restricted: true, type: String, default: ""
+  });
   game.settings.register(MOD, "styleLink", {
     name: "Private style link",
     hint: "Optional: a secret GitHub gist of item icons in the look you want. Used when the base item has no icon to repaint. Keeps campaign art out of the public module.",
@@ -297,13 +302,16 @@ async function paint({ base, baseName, tags, name, description }) {
 
 /** Ask the writing model for name/description options. Hidden tags stay out of the prompt. */
 async function suggest({ kind, baseName, tags }) {
-  const ask = L.writePrompt({ kind: KINDS[kind].toLowerCase(), baseName, tags });
+  const ask = L.writePrompt({ kind: KINDS[kind].toLowerCase(), baseName, tags, style: game.settings.get(MOD, "writeStyle") });
   log("writing:", ask.prompt);
   const res = await falPost(L.WRITE_ENDPOINT, L.writeRequest({ ...ask, model: game.settings.get(MOD, "writeModel") }));
   if (res?.error) throw new Error(`the writing model failed: ${res.error}`);
   const options = L.parseSuggestions(res?.output);
   if (!options.length) throw new Error("the writing model's answer had no suggestions in it");
-  return options;
+  const fitting = options.filter(L.fitsSetting);
+  if (fitting.length < options.length) log("dropped off-setting suggestions:", options.filter((o) => !L.fitsSetting(o)));
+  if (!fitting.length) throw new Error("none of the suggestions fit the setting; click Suggest again");
+  return fitting;
 }
 
 /* ------------------------------------------------------------------ */

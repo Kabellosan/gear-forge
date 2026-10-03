@@ -38,7 +38,7 @@ let falCalls = 0, falBody = null, falModel = null;
 globalThis.fetch = async (url, opts) => {
   if (String(url).startsWith("https://fal.run/")) {
     falCalls++; falModel = url.slice("https://fal.run/".length); falBody = JSON.parse(opts.body);
-    if (falModel === "openrouter/router") return { ok: true, json: async () => ({ output: '```json\n{"options":[{"name":"Greyfang","description":"A long blade with a thick spine, notched by old wars."},{"name":"Widow\'s Reach","description":"Its haft is wrapped in faded red cord."}]}\n```' }) };
+    if (falModel === "openrouter/router") return { ok: true, json: async () => ({ output: '```json\n{"options":[{"name":"Pulsar Raygun","description":"It hums."},{"name":"Greyfang","description":"A long blade with a thick spine, notched by old wars."},{"name":"Widow\'s Reach","description":"Its haft is wrapped in faded red cord."}]}\n```' }) };
     return { ok: true, json: async () => ({ images: [{ url: "data:image/png;base64,1" }] }) };
   }
   return { ok: true, blob: async () => new Blob(["x"], { type: "image/webp" }) };
@@ -67,7 +67,7 @@ const table = (kind) => ({ flags: { "gear-forge": { kind } }, roll: async () => 
   return { roll: { total: rolls }, results: [seq[i % seq.length]] };
 } });
 const settings = { "gear-forge.paint": false, "gear-forge.quality": "medium", "gear-forge.falKey": "", "gear-forge.endpoint": "https://fal.run",
-  "gear-forge.styleLink": "", "gear-forge.styleFolder": "", "gear-forge.style": "", "gear-forge.writeModel": "", "face-forge.falKey": "ff-key" };
+  "gear-forge.styleLink": "", "gear-forge.styleFolder": "", "gear-forge.style": "", "gear-forge.writeModel": "", "gear-forge.writeStyle": "", "face-forge.falKey": "ff-key" };
 const created = [];
 const longsword = {
   uuid: "Compendium.dragonbane-core.items.Item.ls", name: "Longsword", type: "weapon", img: "modules/dragonbane-core/icons/longsword.webp",
@@ -121,7 +121,8 @@ app.gf.tags[1].hidden = true;
 await app.constructor.onSuggest.call(app);
 check(falCalls === 2 && falModel === "openrouter/router" && falBody.model === "anthropic/claude-haiku-4.5", "one writing call");
 check(falBody.prompt.includes("Thick spine") && !falBody.prompt.includes("Subtle") && !falBody.prompt.includes("Durability"), "writing prompt: visible looks only, no rules");
-check(app.gf.suggestions.length === 2 && app.lastHTML.includes("Greyfang") && app.gf.name === "Longsword (Sturdy)", "suggestions shown, nothing applied yet");
+check(app.gf.suggestions.length === 2 && app.lastHTML.includes("Greyfang") && app.gf.name === "Longsword (Sturdy)", "suggestions shown (off-setting one dropped), nothing applied yet");
+check(falBody.system_prompt.includes("no gunpowder"), "setting guide sent");
 await app.constructor.onPick.call(app, null, { dataset: { index: "0" } });
 check(app.gf.name === "Greyfang" && app.gf.description.startsWith("A long blade") && app.lastHTML.includes("notched by old wars.</textarea>"), "picked suggestion fills name and description");
 app.gf.tags[1].hidden = false;
