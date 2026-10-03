@@ -65,6 +65,12 @@ has(edit, "Thick spine", "look in prompt"); lacks(edit, "Durability", "rules sta
 has(edit, "same frame", "edit keeps frame");
 has(L.artPrompt({ baseName: "Longsword", tags, editing: false, style: "" }), "teal ornamental frame", "default style");
 has(L.artPrompt({ baseName: "Shield", tags: [{ name: "Hooked Rim" }], editing: false }), "Hooked Rim", "name when no look");
+{
+  const told = L.artPrompt({ baseName: "Longsword", tags, editing: true, name: "Greyfang", description: "A long blade,\n notched by old wars." });
+  has(told, 'It is known as "Greyfang" (do not write the name on it). How it is described: A long blade, notched by old wars.', "written name and description go in");
+  lacks(L.artPrompt({ baseName: "Longsword", tags, editing: false, name: "Longsword", description: "Plain." }), "known as", "no name line when it's just the base name");
+  lacks(L.artPrompt({ baseName: "Longsword", tags, editing: true, name: "Greyfang" }), "Greyfang", "name alone adds nothing");
+}
 const magicPrompt = L.artPrompt({ baseName: "Axe", tags: [{ name: "Enchanted", what: "Something was bound", special: { enchant: 1 } }, { name: "Keen Edge", magic: true }, { name: "Death Wish", magic: true, drawback: true }], editing: true });
 has(magicPrompt, "magical runes", "magic shows as runes"); lacks(magicPrompt, "Death Wish", "drawbacks not painted"); lacks(magicPrompt, "Something was bound", "pointer tags not painted");
 eq([L.usableIcon("icons/svg/sword.svg"), L.usableIcon("modules/x/longsword.webp"), L.usableIcon("")], [false, true, false], "usable icon");

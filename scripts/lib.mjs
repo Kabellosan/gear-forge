@@ -188,26 +188,34 @@ export const DEFAULT_STYLE =
   "inside a dark teal ornamental frame. Painterly, realistic materials with soft lighting and gentle shadows. " +
   "No text, no hands, no background scene.";
 
-/** What the image model sees: the base item and each tag's *visible* description (or its name), never the rules. */
-export function artPrompt({ baseName, tags, style, editing }) {
+/**
+ * What the image model sees: the base item and each tag's *visible* description (or its name), never the rules.
+ * A written description (Suggest, or the GM's own) leads, so the painting matches the text players read.
+ */
+export function artPrompt({ baseName, tags, style, editing, name, description }) {
   const looks = tags.filter((t) => !t.special && !t.drawback && !t.magic).map((t) => t.what || t.name)
     .filter(Boolean).map((w) => w.replace(/\.$/, ""))
     .concat(tags.some((t) => t.magic && !t.drawback) ? ["faint magical runes glowing along it"] : [])
     .join("; ");
   const item = String(baseName ?? "").trim() || "weapon";
+  const told = String(description ?? "").replace(/\s+/g, " ").trim();
+  const known = String(name ?? "").trim();
+  const story = told ? `${known && known !== item ? `It is known as "${known}" (do not write the name on it). ` : ""}How it is described: ${told}` : "";
   if (editing) {
     return [
       `Repaint this item icon as a variant of the ${item}${looks ? `: ${looks}` : ""}.`,
+      story,
       "Keep the exact same frame, parchment, composition, lighting and painting style as the original icon.",
       "One object only, no text."
-    ].join(" ");
+    ].filter(Boolean).join(" ");
   }
   return [
     `Paint a ${item}${looks ? `: ${looks}` : ""}.`,
+    story,
     (style ?? "").trim() || DEFAULT_STYLE,
     "Match the painting style of any reference images, but do not copy their objects.",
     "One object only, no text."
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }
 
 /** Can the base item's own icon be repainted? System SVG placeholders can't. */

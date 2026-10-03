@@ -280,11 +280,11 @@ async function webp(blob, size = 512) {
 }
 
 /** Paint the gear and upload it. Returns the image path. */
-async function paint({ base, baseName, tags, name }) {
+async function paint({ base, baseName, tags, name, description }) {
   const editing = L.usableIcon(base?.img);
   const images = editing ? [await iconDataURI(base.img)]
     : await Promise.all((await styleRefUrls()).map(async (u) => iconDataURI(u)));
-  const prompt = L.artPrompt({ baseName, tags, editing, style: game.settings.get(MOD, "style") });
+  const prompt = L.artPrompt({ baseName, tags, editing, name, description, style: game.settings.get(MOD, "style") });
   log("painting:", prompt);
   const body = L.imageRequest({ prompt, images, quality: game.settings.get(MOD, "quality") });
   const blob = await callFal(images.length ? L.EDIT_MODEL : L.TEXT_MODEL, body);
@@ -603,7 +603,7 @@ class GearForgeApp extends ApplicationV2 {
     s.status = "Painting… (20–60 seconds)";
     await this.withBusy("paint", async () => {
       try {
-        s.image = await paint({ base: s.base, baseName: s.baseName || KINDS[s.kind], tags: s.tags, name: s.name || s.baseName || "gear" });
+        s.image = await paint({ base: s.base, baseName: s.baseName || KINDS[s.kind], tags: s.tags, name: s.name || s.baseName || "gear", description: s.description });
         s.status = "";
       } catch (err) {
         reportError("could not paint", err);
