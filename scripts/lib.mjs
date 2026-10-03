@@ -184,9 +184,9 @@ export function suggestName(baseName, tags) {
 }
 
 export const DEFAULT_STYLE =
-  "A Dragonbane item icon: a single object lying diagonally across a square of aged, stained parchment, " +
-  "inside a dark teal ornamental frame. Hand-painted storybook illustration: confident ink linework, loose watercolour and gouache washes, " +
-  "slightly stylised shapes, muted earthy colours. No text, no hands, no background scene.";
+  "A Dragonbane item icon: a single object lying diagonally across a square of pale cream parchment, " +
+  "inside a dark teal Celtic knotwork border on a near-black edge. Hand-painted storybook illustration: fine dark ink outlines, " +
+  "soft washed-out greys, browns and rust, gentle shading, slightly stylised shapes. No text, no hands, no background scene.";
 
 const NOT_PHOTO = "Hand-painted illustration, not a photograph or 3D render.";
 
@@ -244,6 +244,18 @@ export function pickIcon(icons, kind, baseName = "", rand = Math.random) {
   const best = Math.max(...pool.map(score));
   const top = pool.filter((i) => score(i) === best);
   return top[Math.floor(rand() * top.length)];
+}
+
+/** The Dragonbane core set's gear icons, where Foundry installs them (no art ships with this module). */
+export const CORESET_ICONS = "modules/dragonbane-coreset/assets/icons/gear";
+
+/** An icon file's kind from its name (axe.webp → weapon, shield-crested.webp → shield); null if it isn't gear. */
+export function kindFromFile(path) {
+  const n = String(path).split("/").pop().toLowerCase();
+  if (/shield|buckler/.test(n)) return "shield";
+  if (/armou?r|helmet|helm|mail|cuirass|gambeson/.test(n)) return "armour";
+  if (/axe|bow|hammer|sword|dagger|knife|spear|mace|flail|club|staff|sling|lance|pike|halberd|trident|crossbow|scythe|sickle/.test(n)) return "weapon";
+  return null;
 }
 
 /** Can the base item's own icon be repainted? System SVG placeholders can't. */
