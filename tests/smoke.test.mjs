@@ -107,6 +107,7 @@ await app.constructor.onRoll.call(app);
 check(app.gf.tags.map((t) => t.name).join() === "Sturdy,Subtle,Clumsy", "three tags rolled");
 check(app.lastHTML.includes("Net −1") && app.lastHTML.includes("6 silver"), "net and price shown (×½)");
 check(app.gf.name === "Longsword (Sturdy)", "suggested name");
+check(app.lastHTML.includes("Damage 2D8 · STR 10 · Durability 15 · slashing, subtle"), "stats after the tags shown");
 
 // Painting is off: no button, and calling it does nothing.
 check(!app.lastHTML.includes('data-action="paint"'), "no paint button while painting is off");
@@ -156,6 +157,7 @@ check(!("_id" in item) && item.flags["gear-forge"].tags.length === 3, "fresh ite
 // Post: hidden tags stay off the chat card.
 await app.constructor.onPost.call(app);
 check(posted[0].content.includes("notched by old wars"), "chat card has the description");
+check(posted[0].content.includes('class="gf-stats">Damage 2D8 · STR 10 · Durability 15 · slashing, long<'), "chat card shows stats from visible tags");
 check(!posted[0].content.includes("Price") && !posted[0].content.includes("gold"), "chat card keeps the price from players");
 check(posted[0].content.includes("Sturdy") && !posted[0].content.includes("Subtle"), "chat card hides hidden tags");
 

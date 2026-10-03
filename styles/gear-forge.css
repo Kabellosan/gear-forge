@@ -18,6 +18,8 @@
 .gear-forge .gf-num { font-family: monospace; min-width: 2.2em; opacity: 0.7; padding-top: 0.1rem; }
 .gear-forge .gf-tag { flex: 1; }
 .gear-forge .gf-tag small { display: block; opacity: 0.85; }
+.gf-stats { margin: 0; font-weight: 600; }
+.gear-forge-card .gf-stats { text-align: center; font-size: 0.9em; }
 .gear-forge .gf-summary { margin: 0; display: flex; align-items: center; gap: 0.5rem; }
 .gear-forge .gf-price-tag, .gf-price { font-weight: 700; }
 .gear-forge .gf-price-tag { font-size: 1.15em; padding: 0.1rem 0.5rem; border-radius: 4px; background: rgba(190, 150, 60, 0.25); border: 1px solid rgba(190, 150, 60, 0.6); }
