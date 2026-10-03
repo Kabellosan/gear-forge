@@ -2,7 +2,7 @@
   "id": "gear-forge",
   "title": "Gear Forge",
   "description": "A d100 weapon tag table plus d20 shield and armour tables, for rolling up gear with a story. Written for Dragonbane; the 'what it is' half of every tag works in any system.",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "authors": [
     {
       "name": "Captain Kabello"
@@ -10,7 +10,7 @@
   ],
   "url": "https://github.com/Kabellosan/gear-forge",
   "manifest": "https://github.com/Kabellosan/gear-forge/releases/latest/download/module.json",
-  "download": "https://github.com/Kabellosan/gear-forge/releases/download/v1.3.2/module.zip",
+  "download": "https://github.com/Kabellosan/gear-forge/releases/download/v1.3.3/module.zip",
   "compatibility": {
     "minimum": "13",
     "verified": "14"

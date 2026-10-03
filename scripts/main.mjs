@@ -263,7 +263,14 @@ async function compendiumIcons() {
       }
     } catch (err) { log("could not index", pack.collection, err); }
   }
-  log(`${out.length} compendium icons to paint into`);
+  try {
+    const res = await filePicker().browse("data", L.CORESET_ICONS);
+    for (const img of res?.files ?? []) {
+      const kind = L.kindFromFile(img);
+      if (kind && L.usableIcon(img) && !out.some((o) => o.img === img)) out.push({ name: img.split("/").pop().replace(/\.\w+$/, "").replace(/-/g, " "), img, kind });
+    }
+  } catch { /* core set not installed */ }
+  log(`${out.length} Dragonbane icons to paint into`);
   return (iconIndex = out);
 }
 

@@ -63,7 +63,7 @@ has(L.tagHTML({ name: "Keen Edge", magic: true, rank: 1 }), "rank 1", "rank show
 const edit = L.artPrompt({ baseName: "Longsword", tags, editing: true });
 has(edit, "Thick spine", "look in prompt"); lacks(edit, "Durability", "rules stay out");
 has(edit, "same frame", "edit keeps frame");
-has(L.artPrompt({ baseName: "Longsword", tags, editing: false, style: "" }), "teal ornamental frame", "default style");
+has(L.artPrompt({ baseName: "Longsword", tags, editing: false, style: "" }), "teal Celtic knotwork border", "default style");
 has(L.artPrompt({ baseName: "Shield", tags: [{ name: "Hooked Rim" }], editing: false }), "Hooked Rim", "name when no look");
 {
   const told = L.artPrompt({ baseName: "Longsword", tags, editing: true, name: "Greyfang", description: "A long blade,\n notched by old wars." });
@@ -84,6 +84,8 @@ has(L.artPrompt({ baseName: "Shield", tags: [{ name: "Hooked Rim" }], editing: f
   for (const p of [borrowed, L.artPrompt({ baseName: "Axe", tags, editing: true }), L.artPrompt({ baseName: "Axe", tags, editing: false })]) has(p, "not a photograph", "never photographic");
   lacks(L.writePrompt({ kind: "weapon", baseName: "Axe", tags: [] }).system_prompt, "Mudwhistle", "no example names to copy");
 }
+eq(["x/axe.webp", "x/shield-crested.webp", "x/armor.webp", "x/helmet.webp", "x/dagger-poison.webp", "x/ring-gold.webp", "x/bag-gold.webp"].map(L.kindFromFile),
+  ["weapon", "shield", "armour", "armour", "weapon", null, null], "core set icon kinds from file names");
 const magicPrompt = L.artPrompt({ baseName: "Axe", tags: [{ name: "Enchanted", what: "Something was bound", special: { enchant: 1 } }, { name: "Keen Edge", magic: true }, { name: "Death Wish", magic: true, drawback: true }], editing: true });
 has(magicPrompt, "magical runes", "magic shows as runes"); lacks(magicPrompt, "Death Wish", "drawbacks not painted"); lacks(magicPrompt, "Something was bound", "pointer tags not painted");
 eq([L.usableIcon("icons/svg/sword.svg"), L.usableIcon("modules/x/longsword.webp"), L.usableIcon("")], [false, true, false], "usable icon");
