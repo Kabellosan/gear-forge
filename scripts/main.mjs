@@ -404,6 +404,7 @@ async function postCard(s) {
     content: `<div class="gear-forge-card">
       ${img ? `<img src="${img}" alt="">` : ""}
       <h3>${L.escapeHTML(s.name || s.base?.name || s.baseName || "Forged gear")}</h3>
+      ${s.base?.system ? `<p class="gf-stats">${L.escapeHTML(L.statLine(s.base.system, shown))}</p>` : ""}
       ${L.flavourHTML(s.description)}
       ${shown.length ? `<ul>${shown.map(L.tagHTML).join("")}</ul>` : ""}
     </div>`
@@ -484,7 +485,7 @@ class GearForgeApp extends ApplicationV2 {
     const base = s.base
       ? `<div class="gf-drop has-base">
            <img src="${s.base.img}" alt="">
-           <span><strong>${L.escapeHTML(s.base.name)}</strong><br><small>${KINDS[s.kind]}${s.base.system?.damage ? ` · ${L.escapeHTML(s.base.system.damage)}` : ""}${s.base.system?.cost ? ` · ${L.escapeHTML(s.base.system.cost)}` : ""}</small></span>
+           <span><strong>${L.escapeHTML(s.base.name)}</strong><br><small>${KINDS[s.kind]} · ${L.escapeHTML(L.statLine(s.base.system) || "no stats")}${s.base.system?.cost ? ` · ${L.escapeHTML(s.base.system.cost)}` : ""}</small></span>
            <a data-action="clearBase" title="Clear"><i class="fa-solid fa-xmark"></i></a>
          </div>`
       : `<div class="gf-drop"><i class="fa-solid fa-hand-holding"></i> Drop a weapon, shield or armour here — or name one:</div>
@@ -524,6 +525,7 @@ class GearForgeApp extends ApplicationV2 {
         <button type="button" data-action="curse" ${s.busy ? "disabled" : ""} title="Roll a drawback; it pays for one enchantment"><i class="fa-solid fa-skull"></i> Curse</button>
       </div>
       ${s.tags.length ? `<ul class="gf-tags">${tags}</ul>
+        ${s.base?.system ? `<p class="gf-stats" title="Stats after the tags (hidden ones included)"><i class="fa-solid fa-scale-balanced"></i> ${L.escapeHTML(L.statLine(s.base.system, s.tags))}</p>` : ""}
         <p class="gf-summary">${p.unique ? `<span class="gf-price-tag">Unique</span> Magical: no market price`
           : `<span class="gf-price-tag">${L.escapeHTML(p.asking.label)}</span> Net ${L.signed(p.asking.net)}${p.worth.label !== p.asking.label ? ` · <span title="Counting the hidden tags">really worth ${L.escapeHTML(p.worth.label)}</span>` : ""}`}</p>
         <div class="gf-result">

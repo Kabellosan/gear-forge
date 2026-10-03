@@ -51,6 +51,13 @@ eq([L.scaleCost("25 gold", 10), L.scaleCost("5 silver", 3), L.scaleCost("3 silve
 eq(L.netPoints([{ points: 1 }, { points: 2, magic: true }, { points: -1 }]), 0, "magic tags don't count toward net");
 eq([L.isUnique([{ points: 1 }]), L.isUnique([{ magic: true }])], [false, true], "magic = unique");
 
+// Stat line: what the sheet would show, after the tags.
+const statSword = { str: 10, durability: 12, damage: "2D8", grip: { value: "grip1h" }, features: ["slashing"] };
+eq(L.statLine(statSword), "Damage 2D8 · STR 10 · Durability 12 · 1H · slashing", "stat line");
+eq(L.statLine(statSword, [{ name: "Heavy Head" }, { name: "Long" }]), "Damage 2D10 · STR 13 · Durability 9 · 1H · slashing, long", "stat line after tags");
+eq(L.statLine({ rating: 3, banes: "Sneaking", bonuses: ["slashing"] }), "Armour 3 · +2 vs slashing · bane: Sneaking", "armour stat line");
+eq(L.statLine(undefined), "", "no stats");
+
 // Descriptions: hidden tags go to the GM half.
 const tags = [
   { name: "Sturdy", points: 1, what: "Thick spine.", rule: "Durability +3." },

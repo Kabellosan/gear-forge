@@ -110,6 +110,33 @@ export function applyEffects(system = {}, tags = []) {
   return out;
 }
 
+const FEATURE_NAMES = {
+  bludgeoning: "bludgeoning", piercing: "piercing", slashing: "slashing", long: "long", mounted: "needs a mount",
+  noDamageBonus: "no damage bonus", noparry: "can't parry", subtle: "subtle", thrown: "thrown", toppling: "toppling",
+  enchanted1: "enchanted"
+};
+
+/**
+ * One line of stats as the sheet would show them: "Damage 2D8 · STR 10 · Durability 15 · 1H · slashing, long".
+ * With tags, shows the stats after their effects. Empty when the base has no stats (a typed name).
+ */
+export function statLine(system, tags = []) {
+  if (!system) return "";
+  const s = { ...system, ...applyEffects(system, tags) };
+  const parts = [];
+  if (s.damage) parts.push(`Damage ${s.damage}`);
+  if (typeof s.rating === "number") parts.push(`Armour ${s.rating}`);
+  if (typeof s.str === "number" && s.str > 0) parts.push(`STR ${s.str}`);
+  if (typeof s.durability === "number" && s.durability > 0) parts.push(`Durability ${s.durability}`);
+  const grip = s.grip?.value;
+  if (grip) parts.push(grip === "grip2h" ? "2H" : "1H");
+  const feats = (s.features ?? []).filter((f) => f !== "shield").map((f) => FEATURE_NAMES[f] ?? f);
+  if (feats.length) parts.push(feats.join(", "));
+  if (s.bonuses?.length) parts.push(`+2 vs ${s.bonuses.join(", ")}`);
+  if (s.banes) parts.push(`bane: ${s.banes}`);
+  return parts.join(" · ");
+}
+
 /** Points count only for mundane tags; magic makes an item Unique instead. */
 export const netPoints = (tags) => tags.reduce((sum, t) => sum + (t.magic ? 0 : (t.points ?? 0)), 0);
 export const isUnique = (tags) => tags.some((t) => t.magic);
