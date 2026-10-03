@@ -146,7 +146,7 @@ check(item.name === "Greyfang" && item.system.itemDescription.includes("<p>A lon
 check(item.system.gmDescription.startsWith('<p class="gf-price"><strong>Price:</strong> 36 gold</p>') && !item.system.itemDescription.includes("Price"), "price is GM-only");
 check(item.img === app.gf.image && item.folder === "folder1", "item uses the painting, in the Gear Forge folder");
 check(item.system.durability === 15 && item.system.features.includes("long") && item.system.features.includes("subtle"), "effects applied, hidden ones too");
-check(item.system.cost === "36 gold", `price scaled (got ${item.system.cost})`);
+check(item.system.cost === "", `cost field left blank for players (got ${item.system.cost})`);
 check(item.system.itemDescription.startsWith("<p>Book text.</p>") && item.system.itemDescription.includes("Sturdy") && !item.system.itemDescription.includes("Subtle"), "visible tags for players");
 check(item.system.gmDescription.includes("Subtle"), "hidden tag for the GM");
 check(!("_id" in item) && item.flags["gear-forge"].tags.length === 3, "fresh item with tag flags");
