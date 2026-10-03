@@ -18,6 +18,7 @@ Foundry VTT module for Captain's Dragonbane campaign. Tag tables for rolling up 
 - **Only simple, unambiguous tags change stats** (`EFFECTS` in lib.mjs: STR, Durability, damage step, system features like long/subtle/toppling/thrown/noparry/mounted, armour rating and bonuses). Everything else goes into the description for the GM to run.
 - **The window stays compact** (Captain, 2026-10-03: it "no longer really fits"). Picture (112 px; the base icon dimmed until painted) sits beside Name + Description; suggestions fold away once one is picked; the window re-fits its height on every render.
 - **Hidden tags** (eye toggle) go to `gmDescription`, visible ones to `itemDescription`; chat cards show visible tags only.
+- **The price is GM-only** (Captain, 2026-10-03): a highlighted Price line opens `gmDescription` and the Forge window shows it as a tag; the player description and chat card never show it. `system.cost` still holds the scaled price.
 - **No copyrighted art in this repo.** Captain's reference icons (from the purchased Dragonbane module) live in `private/refs/` (gitignored); for Foundry they go in a secret gist or world folder.
 - **fal key falls back to Face Forge's, then Terrain Forge's.** GM-only, no socket relay (players never forge).
 
