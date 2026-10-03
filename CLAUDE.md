@@ -13,6 +13,7 @@ Foundry VTT module for Captain's Dragonbane campaign. Tag tables for rolling up 
 - **Painting is off by default and only happens on a click** (Captain: don't burn dollars on random loot). Rolling never calls fal.ai; the Paint button only renders when the *Paint gear* setting is on, and shows its cost.
 - **Repaint the base item's own icon.** The Dragonbane core module's item icons share one frame and parchment, so a GPT Image 1.5 `/edit` of the base icon keeps the look for about 6¢ (1 input image). No icon (typed base name, or an SVG placeholder) → style references from a secret gist / world folder, else text-only with `DEFAULT_STYLE`.
 - **Names and descriptions are suggested, never applied** (Captain, 2026-10-03: "a bot could look at the tags and come up with a name or a small description"). *Suggest* calls fal.ai's `openrouter/router` (an OpenRouter LLM proxy) with the same fal key, so no second provider or key; default model Claude Haiku 4.5, changeable in *Writing model*. One request returns three options; a click fills the Name and Description fields. Only visible tags go in (hidden flaws must not leak into player text) and never the rules. The description lands in `itemDescription` above the Forged list and on the chat card. Painting reads the name and description too (Captain: "a fully fledged custom piece of gear with name and image"), so Suggest → pick → Paint gives matching text and art; the name goes in with "do not write the name on it". A picked name/description is dropped on a new roll or base unless the GM edited it.
+- **Suggestions must fit the Vale** (Captain, 2026-10-03: no "Pulsar Raygun" from ranged tags). `WRITE_SETTING` in lib.mjs is an original setting guide (tone, peoples, medieval tech, how ranged and magic features read, folk naming patterns with invented examples; no Free League prose, the repo is public). The *Writing direction* setting appends campaign notes. `ANACHRONISM` drops any option with sci-fi/modern words before the GM sees it; widen that list rather than loosen the guide.
 - **The prompt gets each tag's *what it is* (or its name), never the Dragonbane rule**, so rules text doesn't end up painted.
 - **Only simple, unambiguous tags change stats** (`EFFECTS` in lib.mjs: STR, Durability, damage step, system features like long/subtle/toppling/thrown/noparry/mounted, armour rating and bonuses). Everything else goes into the description for the GM to run.
 - **Hidden tags** (eye toggle) go to `gmDescription`, visible ones to `itemDescription`; chat cards show visible tags only.
@@ -41,7 +42,7 @@ Item types: `weapon` (shields are weapons with feature `shield`), `armor`, `helm
 
 Foundry v14 on Sqyre (installs by manifest URL only; zip needs module.json at the root). Dragonbane system 4.1.1.
 
-## Open threads (as of v1.3.0)
+## Open threads (as of v1.3.1)
 
 - Nothing run on real Foundry yet (the Suggest call to `openrouter/router` included): the Forge window, drop handling, `table.roll()` in v14, and the sidebar/context/sheet entry points are mock-tested only.
 - Repainting 64–128 px icons: unknown how well GPT keeps the frame from such small inputs (they're upscaled to 512 before sending). If it drifts, composite a blank frame instead (like Face Forge's ring).

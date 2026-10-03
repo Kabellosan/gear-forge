@@ -257,26 +257,41 @@ export function pickRefs(paths, max = MAX_REFS, rand = Math.random) {
 export const WRITE_ENDPOINT = "openrouter/router";
 export const WRITE_MODEL = "anthropic/claude-haiku-4.5";
 
-const WRITE_SYSTEM =
-  "You name and describe gear for Dragonbane, a fantasy tabletop RPG with a gritty, folk-tale, slightly humorous tone. " +
-  "Write like an item card in a rulebook: concrete, sensory, a hint of history or who made it. " +
-  "Never state rules, numbers, dice or game mechanics; the rules are printed separately. " +
-  "Answer with JSON only: {\"options\":[{\"name\":\"…\",\"description\":\"…\"}, …]}.";
+/**
+ * The setting guardrails. Original text (no Free League prose: this repo is public).
+ * The GM's *Writing direction* setting is appended for campaign specifics.
+ */
+export const WRITE_SETTING = [
+  "You name and describe gear for Dragonbane: a gritty, folk-tale fantasy world with a dry sense of humour, rooted in Nordic folklore.",
+  "The Misty Vale is a wild, ruined land of forests, marshes and old fallen kingdoms. Its peoples are humans, elves, dwarves, halflings, wolfkin and mallards (proud duck-folk).",
+  "Technology is medieval: iron, steel, bronze, wood, bone, horn, leather, wool and stone, made by smiths, bowyers and fletchers. Ranged weapons are bows, crossbows, slings and things that are thrown.",
+  "There is no gunpowder, clockwork, electricity or machinery, and nothing science-fiction, modern or industrial. Magic is rare, old and costly: runes, spirits, elemental and mind magic, curses and bargains with demons.",
+  "Names sound folk-made, not marketed: a nickname earned in use (Old Thorn, Mudwhistle), an owner or maker (Grandmother's Cleaver, Brannoc's Spite), or plain and descriptive (the Ferryman's Hook). No brand-like or epic-superlative names.",
+  "Descriptions read like an item card in a rulebook: concrete and sensory, with a hint of history, who made it or who lost it. Never state rules, numbers, dice or game mechanics; those are printed separately."
+].join(" ");
+
+const WRITE_FORMAT = "Answer with JSON only: {\"options\":[{\"name\":\"…\",\"description\":\"…\"}, …]}.";
+
+/** Words that don't belong in the Vale. A suggestion using one is dropped. */
+export const ANACHRONISM = /\b(guns?|gunpowder|pistols?|rifles?|muskets?|cannons?|blasters?|lasers?|ray ?guns?|raygun|pulsar|plasma|photon|ion|quantum|atomic|nuclear|cyber\w*|robot\w*|mech|android|electric\w*|batter(y|ies)|circuit\w*|motor\w*|turbo|rocket\w*|missile\w*|bullets?|cartridges?|trigger-happy|grenades?|sci-?fi|neon|chrome|titanium|aluminium|aluminum|plastic|digital|tech|futuristic)\b/i;
+
+export const fitsSetting = (o) => !ANACHRONISM.test(`${o?.name ?? ""} ${o?.description ?? ""}`);
 
 /**
  * The prompt for name/description suggestions. Only tags the players can see go in:
  * a hidden flaw must not leak into the description they'll read.
  */
-export function writePrompt({ kind, baseName, tags, count = 3 }) {
+export function writePrompt({ kind, baseName, tags, count = 3, style = "" }) {
   const lines = tags.filter((t) => !t.hidden && !t.special).map((t) => {
     const label = t.magic ? (t.drawback ? "curse" : "enchantment") : (t.points ?? 0) < 0 ? "flaw" : "feature";
     return `- ${t.name} (${label})${t.what ? `: ${t.what.replace(/\.$/, "")}` : ""}`;
   });
   const item = String(baseName ?? "").trim() || kind || "weapon";
   return {
-    system_prompt: WRITE_SYSTEM,
+    system_prompt: [WRITE_SETTING, String(style ?? "").trim() && `Campaign notes from the GM: ${String(style).trim()}`, WRITE_FORMAT].filter(Boolean).join("\n\n"),
     prompt: [
       `Base item: ${item} (${kind}).`,
+      "Read each feature as it would exist in this world: a ranged or magical feature is a bow, crossbow, sling, throwing weapon, rune or spirit, never a firearm or device.",
       lines.length ? `What sets this one apart:\n${lines.join("\n")}` : "Nothing special sets it apart.",
       `Give ${count} different options. Each name is 1–4 words: an evocative name, a maker's mark, or "the X of Y"; not just the base item's name. ` +
       "Each description is 1–2 sentences, under 45 words, and works the features into what the item looks and feels like."
