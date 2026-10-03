@@ -8,7 +8,7 @@ import { compilePack } from "@foundryvtt/foundryvtt-cli";
 
 const MODULE_ID = "gear-forge";
 const REPO = "Kabellosan/gear-forge";
-const VERSION = "1.5.1";
+const VERSION = "1.6.0";
 const NOTE = process.env.GEAR_FORGE_NOTE || "/home/captain/cloud-lab/obsidian-data/vault/Ikairos-Server/Capt. Kabel Pairate Vault/"
   + "50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/Dragonbane - Arms & Armour Tags (Homebrew).md";
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
@@ -118,7 +118,7 @@ function buildTable(key, name, formula, rows, description, img) {
 
 const tables = [
   buildTable("weapon", "Weapon Tags (d100)", "1d100", weaponRows(),
-    "01–75 virtues, 76–00 flaws. Roll once per tag (three, or 1–10 weighted); the tags are prompts, the fiction wins.",
+    "01–80 virtues, 81–00 flaws. Roll once per tag (three, or 1–10 weighted); the tags are prompts, the fiction wins.",
     "icons/weapons/swords/sword-guard-steel.webp"),
   buildTable("shield", "Shield Tags (d20)", "1d20", d20Rows("## 🛡️", "## 🥋"),
     "1–15 virtues, 16–20 flaws.", "icons/equipment/shield/heater-steel-worn.webp"),
