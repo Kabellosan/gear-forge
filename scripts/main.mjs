@@ -246,10 +246,31 @@ async function styleRefUrls() {
 
 const hasStyleRefs = () => !!(game.settings.get(MOD, "styleLink").trim() || game.settings.get(MOD, "styleFolder").trim());
 
-/** How many images go along with a painting: the base icon, or the style references. */
+/** Item icons from the Dragonbane system and its modules (the core module's share one frame and parchment). */
+let iconIndex = null;
+async function compendiumIcons() {
+  if (iconIndex) return iconIndex;
+  const out = [];
+  for (const pack of game.packs?.values?.() ?? []) {
+    if (pack.documentName !== "Item") continue;
+    const pkg = `${pack.metadata?.packageName ?? ""} ${pack.metadata?.id ?? pack.collection ?? ""}`;
+    if (!/dragonbane/i.test(pkg)) continue;
+    try {
+      const index = await pack.getIndex({ fields: ["img", "type", "system.features"] });
+      for (const e of index) {
+        const kind = L.kindOf(e);
+        if (kind && L.usableIcon(e.img)) out.push({ name: e.name, img: e.img, kind });
+      }
+    } catch (err) { log("could not index", pack.collection, err); }
+  }
+  log(`${out.length} compendium icons to paint into`);
+  return (iconIndex = out);
+}
+
+/** How many images go along with a painting: the base icon, the style references, or a borrowed icon. */
 function inputCount(base) {
   if (L.usableIcon(base?.img)) return 1;
-  return hasStyleRefs() ? L.MAX_REFS : 0;
+  return hasStyleRefs() ? L.MAX_REFS : 1;
 }
 
 async function falPost(model, body) {
@@ -285,11 +306,18 @@ async function webp(blob, size = 512) {
 }
 
 /** Paint the gear and upload it. Returns the image path. */
-async function paint({ base, baseName, tags, name, description }) {
+async function paint({ base, kind, baseName, tags, name, description }) {
+  // Best: repaint the base item's own icon. Else the configured style references.
+  // Else paint into a Dragonbane compendium icon of the same kind, so frame and style still match.
   const editing = L.usableIcon(base?.img);
-  const images = editing ? [await iconDataURI(base.img)]
+  let images = editing ? [await iconDataURI(base.img)]
     : await Promise.all((await styleRefUrls()).map(async (u) => iconDataURI(u)));
-  const prompt = L.artPrompt({ baseName, tags, editing, name, description, style: game.settings.get(MOD, "style") });
+  let borrowed = null;
+  if (!images.length) {
+    borrowed = L.pickIcon(await compendiumIcons(), kind, baseName);
+    if (borrowed) { log("painting into", borrowed.name, borrowed.img); images = [await iconDataURI(borrowed.img)]; }
+  }
+  const prompt = L.artPrompt({ baseName, tags, editing, borrowed: !!borrowed, name, description, style: game.settings.get(MOD, "style") });
   log("painting:", prompt);
   const body = L.imageRequest({ prompt, images, quality: game.settings.get(MOD, "quality") });
   const blob = await callFal(images.length ? L.EDIT_MODEL : L.TEXT_MODEL, body);
@@ -611,7 +639,7 @@ class GearForgeApp extends ApplicationV2 {
     s.status = "Painting… (20–60 seconds)";
     await this.withBusy("paint", async () => {
       try {
-        s.image = await paint({ base: s.base, baseName: s.baseName || KINDS[s.kind], tags: s.tags, name: s.name || s.baseName || "gear", description: s.description });
+        s.image = await paint({ base: s.base, kind: s.kind, baseName: s.baseName || KINDS[s.kind], tags: s.tags, name: s.name || s.baseName || "gear", description: s.description });
         s.status = "";
       } catch (err) {
         reportError("could not paint", err);

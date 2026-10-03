@@ -184,15 +184,17 @@ export function suggestName(baseName, tags) {
 }
 
 export const DEFAULT_STYLE =
-  "A Dragonbane item icon: a single painted object lying diagonally across a square of aged, stained parchment, " +
-  "inside a dark teal ornamental frame. Painterly, realistic materials with soft lighting and gentle shadows. " +
-  "No text, no hands, no background scene.";
+  "A Dragonbane item icon: a single object lying diagonally across a square of aged, stained parchment, " +
+  "inside a dark teal ornamental frame. Hand-painted storybook illustration: confident ink linework, loose watercolour and gouache washes, " +
+  "slightly stylised shapes, muted earthy colours. No text, no hands, no background scene.";
+
+const NOT_PHOTO = "Hand-painted illustration, not a photograph or 3D render.";
 
 /**
  * What the image model sees: the base item and each tag's *visible* description (or its name), never the rules.
  * A written description (Suggest, or the GM's own) leads, so the painting matches the text players read.
  */
-export function artPrompt({ baseName, tags, style, editing, name, description }) {
+export function artPrompt({ baseName, tags, style, editing, borrowed, name, description }) {
   const looks = tags.filter((t) => !t.special && !t.drawback && !t.magic).map((t) => t.what || t.name)
     .filter(Boolean).map((w) => w.replace(/\.$/, ""))
     .concat(tags.some((t) => t.magic && !t.drawback) ? ["faint magical runes glowing along it"] : [])
@@ -201,11 +203,21 @@ export function artPrompt({ baseName, tags, style, editing, name, description })
   const told = String(description ?? "").replace(/\s+/g, " ").trim();
   const known = String(name ?? "").trim();
   const story = told ? `${known && known !== item ? `It is known as "${known}" (do not write the name on it). ` : ""}How it is described: ${told}` : "";
+  if (borrowed) {
+    return [
+      `Paint a new item into this icon: a ${item}${looks ? `: ${looks}` : ""}.`,
+      story,
+      "Replace the object completely, but keep the exact same frame, parchment, composition, lighting and painting style as the original icon.",
+      NOT_PHOTO,
+      "One object only, no text."
+    ].filter(Boolean).join(" ");
+  }
   if (editing) {
     return [
       `Repaint this item icon as a variant of the ${item}${looks ? `: ${looks}` : ""}.`,
       story,
       "Keep the exact same frame, parchment, composition, lighting and painting style as the original icon.",
+      NOT_PHOTO,
       "One object only, no text."
     ].filter(Boolean).join(" ");
   }
@@ -214,8 +226,24 @@ export function artPrompt({ baseName, tags, style, editing, name, description })
     story,
     (style ?? "").trim() || DEFAULT_STYLE,
     "Match the painting style of any reference images, but do not copy their objects.",
+    NOT_PHOTO,
     "One object only, no text."
   ].filter(Boolean).join(" ");
+}
+
+/**
+ * With no base icon, borrow one from the Dragonbane compendiums to paint into: the same kind,
+ * preferring the one whose name shares the most words with the typed base name.
+ * icons: [{ name, img, kind }]. Returns one of them, or null.
+ */
+export function pickIcon(icons, kind, baseName = "", rand = Math.random) {
+  const pool = (icons ?? []).filter((i) => i.kind === kind && usableIcon(i.img));
+  if (!pool.length) return null;
+  const words = new Set(String(baseName).toLowerCase().match(/[a-z]{3,}/g) ?? []);
+  const score = (i) => (String(i.name).toLowerCase().match(/[a-z]{3,}/g) ?? []).filter((w) => words.has(w)).length;
+  const best = Math.max(...pool.map(score));
+  const top = pool.filter((i) => score(i) === best);
+  return top[Math.floor(rand() * top.length)];
 }
 
 /** Can the base item's own icon be repainted? System SVG placeholders can't. */
@@ -266,7 +294,7 @@ export const WRITE_SETTING = [
   "The Misty Vale is a wild, ruined land of forests, marshes and old fallen kingdoms. Its peoples are humans, elves, dwarves, halflings, wolfkin and mallards (proud duck-folk).",
   "Technology is medieval: iron, steel, bronze, wood, bone, horn, leather, wool and stone, made by smiths, bowyers and fletchers. Ranged weapons are bows, crossbows, slings and things that are thrown.",
   "There is no gunpowder, clockwork, electricity or machinery, and nothing science-fiction, modern or industrial. Magic is rare, old and costly: runes, spirits, elemental and mind magic, curses and bargains with demons.",
-  "Names sound folk-made, not marketed: a nickname earned in use (Old Thorn, Mudwhistle), an owner or maker (Grandmother's Cleaver, Brannoc's Spite), or plain and descriptive (the Ferryman's Hook). No brand-like or epic-superlative names.",
+  "Names sound folk-made, not marketed: a nickname earned in use, an owner's or maker's name in the possessive, or a plain descriptive \"the X's Y\". Invent fresh names that come from this item's own features; no brand-like or epic-superlative names.",
   "Descriptions read like an item card in a rulebook: concrete and sensory, with a hint of history, who made it or who lost it. Never state rules, numbers, dice or game mechanics; those are printed separately."
 ].join(" ");
 
