@@ -7,6 +7,7 @@ A Foundry VTT module (v13–v14) for rolling up weapons, shields and armour with
 - **Balanced toward Dragonbane RAW**: printed features first, price anchored on Mastercrafted (×10), and magic only from the *Book of Magic*: enchantment and drawback tables, with each drawback paying for an enchantment. Magic items are Unique, with no price.
 - **Rules journal**: how to use it, pricing, and the Dragonbane ground rules the tags lean on.
 - **Optional painting** with fal.ai, **off by default**. Turn on *Paint gear* in the module settings to get a Paint button (a few cents per image, only when you click it). It repaints the base item's own icon with the rolled tags, so the result matches your item art.
+- **Suggest a name and description.** Next to the Name field, *Suggest* asks a language model (through fal.ai, same key as painting) for three names with a one- or two-sentence description written from the visible tags. Click one to fill the Name and Description fields, then edit freely; nothing changes until you click. Hidden tags never reach the model, so a secret flaw can't leak into the text players read. Well under 1¢ a click; pick another model in *Writing model*. Paint after picking and the painting follows the name and description, so text and art match.
 
 Written for **Dragonbane**. Every tag has a system-free *what it is* half, so it travels to other games.
 

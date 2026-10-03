@@ -31,6 +31,11 @@ Hooks.once("init", () => {
     hint: "Leave as https://fal.run unless you run your own proxy.",
     scope: "world", config: true, restricted: true, type: String, default: "https://fal.run"
   });
+  game.settings.register(MOD, "writeModel", {
+    name: "Writing model",
+    hint: "Suggests names and descriptions from the tags, through fal.ai's OpenRouter endpoint (same key). Any OpenRouter model id; empty = Claude Haiku 4.5, well under 1¢ a click.",
+    scope: "world", config: true, restricted: true, type: String, default: ""
+  });
   game.settings.register(MOD, "styleLink", {
     name: "Private style link",
     hint: "Optional: a secret GitHub gist of item icons in the look you want. Used when the base item has no icon to repaint. Keeps campaign art out of the public module.",
@@ -242,7 +247,7 @@ function inputCount(base) {
   return hasStyleRefs() ? L.MAX_REFS : 0;
 }
 
-async function callFal(model, body) {
+async function falPost(model, body) {
   const key = falKey();
   if (!key) throw new Error("No fal.ai API key. Add one in Configure Settings → Gear Forge (or Face Forge / Terrain Forge).");
   const endpoint = game.settings.get(MOD, "endpoint").replace(/\/+$/, "");
@@ -256,7 +261,11 @@ async function callFal(model, body) {
     if (res.status === 401 || res.status === 403) throw new Error(`fal.ai rejected the key (${res.status}).`);
     throw new Error(`fal.ai error ${res.status}: ${text}`);
   }
-  const url = (await res.json())?.images?.[0]?.url;
+  return res.json();
+}
+
+async function callFal(model, body) {
+  const url = (await falPost(model, body))?.images?.[0]?.url;
   if (!url) throw new Error("fal.ai returned no image.");
   return (await fetch(url)).blob();
 }
@@ -271,11 +280,11 @@ async function webp(blob, size = 512) {
 }
 
 /** Paint the gear and upload it. Returns the image path. */
-async function paint({ base, baseName, tags, name }) {
+async function paint({ base, baseName, tags, name, description }) {
   const editing = L.usableIcon(base?.img);
   const images = editing ? [await iconDataURI(base.img)]
     : await Promise.all((await styleRefUrls()).map(async (u) => iconDataURI(u)));
-  const prompt = L.artPrompt({ baseName, tags, editing, style: game.settings.get(MOD, "style") });
+  const prompt = L.artPrompt({ baseName, tags, editing, name, description, style: game.settings.get(MOD, "style") });
   log("painting:", prompt);
   const body = L.imageRequest({ prompt, images, quality: game.settings.get(MOD, "quality") });
   const blob = await callFal(images.length ? L.EDIT_MODEL : L.TEXT_MODEL, body);
@@ -284,6 +293,17 @@ async function paint({ base, baseName, tags, name }) {
   const file = new File([await webp(blob)], `${L.slugify(name)}-${Date.now()}.webp`, { type: "image/webp" });
   const up = await filePicker().upload("data", dir, file, {}, { notify: false });
   return up?.path ?? `${dir}/${file.name}`;
+}
+
+/** Ask the writing model for name/description options. Hidden tags stay out of the prompt. */
+async function suggest({ kind, baseName, tags }) {
+  const ask = L.writePrompt({ kind: KINDS[kind].toLowerCase(), baseName, tags });
+  log("writing:", ask.prompt);
+  const res = await falPost(L.WRITE_ENDPOINT, L.writeRequest({ ...ask, model: game.settings.get(MOD, "writeModel") }));
+  if (res?.error) throw new Error(`the writing model failed: ${res.error}`);
+  const options = L.parseSuggestions(res?.output);
+  if (!options.length) throw new Error("the writing model's answer had no suggestions in it");
+  return options;
 }
 
 /* ------------------------------------------------------------------ */
@@ -320,6 +340,7 @@ async function createItem(s) {
   if (price) data.system.cost = price;
   if (unique && game.system.id === "dragonbane") Object.assign(data.system, { cost: "", supply: "unique" });
   const text = L.describeTags(tags, { multiplier: mult, price: price ? `${price} (×${mult})` : undefined });
+  text.visible = L.flavourHTML(s.description) + text.visible;
   if ("itemDescription" in data.system || game.system.id === "dragonbane") {
     data.system.itemDescription = appendHTML(data.system.itemDescription, text.visible);
     data.system.gmDescription = appendHTML(data.system.gmDescription, text.hidden);
@@ -340,6 +361,7 @@ async function postCard(s) {
     content: `<div class="gear-forge-card">
       ${img ? `<img src="${img}" alt="">` : ""}
       <h3>${L.escapeHTML(s.name || s.base?.name || s.baseName || "Forged gear")}</h3>
+      ${L.flavourHTML(s.description)}
       ${shown.length ? `<ul>${shown.map(L.tagHTML).join("")}</ul>` : ""}
     </div>`
   });
@@ -366,6 +388,8 @@ class GearForgeApp extends ApplicationV2 {
       hide: GearForgeApp.onHide,
       clearBase: GearForgeApp.onClearBase,
       paint: GearForgeApp.onPaint,
+      suggest: GearForgeApp.onSuggest,
+      pick: GearForgeApp.onPick,
       post: GearForgeApp.onPost,
       create: GearForgeApp.onCreate
     }
@@ -382,7 +406,7 @@ class GearForgeApp extends ApplicationV2 {
 
   constructor() {
     super();
-    this.gf = { base: null, baseUuid: null, baseName: "", kind: "weapon", count: 3, tags: [], name: "", nameEdited: false, image: null, busy: false, status: "" };
+    this.gf = { base: null, baseUuid: null, baseName: "", kind: "weapon", count: 3, tags: [], name: "", nameEdited: false, description: "", suggestions: [], picked: null, image: null, busy: false, status: "" };
   }
 
   setBase(item) {
@@ -391,7 +415,16 @@ class GearForgeApp extends ApplicationV2 {
     const s = this.gf;
     if (kind !== s.kind) s.tags = [];
     Object.assign(s, { base: item.toObject(), baseUuid: item.uuid, baseName: item.name, kind, image: null });
+    this.forgetWriting();
     this.autoName();
+  }
+
+  /** New tags or a new base: drop the suggestions, and a picked name/description the GM didn't change since. */
+  forgetWriting() {
+    const s = this.gf;
+    if (s.picked?.name && s.name === s.picked.name) { s.nameEdited = false; s.name = ""; }
+    if (s.picked?.description && s.description === s.picked.description) s.description = "";
+    Object.assign(s, { suggestions: [], picked: null });
   }
 
   autoName() {
@@ -434,6 +467,10 @@ class GearForgeApp extends ApplicationV2 {
       ? `<div class="gf-art gf-wait"><i class="fa-solid fa-paintbrush fa-beat-fade"></i></div>`
       : s.image ? `<div class="gf-art"><img src="${s.image}" alt=""></div>` : "";
 
+    const suggestions = s.suggestions.length ? `<ul class="gf-suggestions">${s.suggestions.map((o, i) => `
+      <li><a data-action="pick" data-index="${i}" title="Use this name and description (you can still edit both)">
+        <strong>${L.escapeHTML(o.name)}</strong> <span>${L.escapeHTML(o.description)}</span></a></li>`).join("")}</ul>` : "";
+
     return `
       ${base}
       <div class="gf-row">
@@ -445,7 +482,12 @@ class GearForgeApp extends ApplicationV2 {
       </div>
       ${s.tags.length ? `<ul class="gf-tags">${tags}</ul>
         <p class="gf-summary">${unique ? `<strong>Magical · Unique</strong>: no market price` : `Net <strong>${L.signed(net)}</strong> · ${price ? `<strong>${price}</strong> (×${mult})` : `×${mult} book price`}`}</p>
-        <label>Name<input type="text" name="name" value="${L.escapeHTML(s.name)}"></label>
+        <div class="gf-row gf-name">
+          <label>Name<input type="text" name="name" value="${L.escapeHTML(s.name)}"></label>
+          <button type="button" data-action="suggest" ${s.busy ? "disabled" : ""} title="Suggest names and descriptions from the visible tags (well under 1¢)"><i class="fa-solid fa-feather${s.busy === "suggest" ? " fa-beat-fade" : ""}"></i> ${s.suggestions.length ? "Suggest more" : "Suggest"}</button>
+        </div>
+        ${suggestions}
+        <label>Description<textarea name="description" rows="3" placeholder="Optional: goes on the item above the tags. Write your own or click Suggest.">${L.escapeHTML(s.description)}</textarea></label>
         ${art}` : ""}
       <footer class="gf-footer">
         <span class="gf-status">${L.escapeHTML(s.status)}</span>
@@ -457,10 +499,11 @@ class GearForgeApp extends ApplicationV2 {
 
   _replaceHTML(result, content) {
     content.innerHTML = result;
-    content.querySelectorAll("input, select").forEach((el) => el.addEventListener("change", () => {
+    content.querySelectorAll("input, select, textarea").forEach((el) => el.addEventListener("change", () => {
       const s = this.gf;
       if (el.name === "count") s.count = Math.clamp(Number(el.value) || 3, 1, 6);
       else if (el.name === "name") { s.name = el.value; s.nameEdited = !!el.value; }
+      else if (el.name === "description") s.description = el.value;
       else if (el.name === "kind") { if (el.value !== s.kind) s.tags = []; s.kind = el.value; this.autoName(); this.render(); }
       else if (el.name === "baseName") { s.baseName = el.value; this.autoName(); this.render(); }
     }));
@@ -495,6 +538,7 @@ class GearForgeApp extends ApplicationV2 {
         const tags = [];
         for (let i = 0; i < s.count; i++) tags.push(...await rollExpanded(s.kind, s.kind));
         Object.assign(s, { tags, image: null, status: "" });
+        this.forgetWriting();
         this.autoName();
       } catch (err) { reportError("could not roll tags", err); }
     });
@@ -548,6 +592,7 @@ class GearForgeApp extends ApplicationV2 {
 
   static onClearBase() {
     Object.assign(this.gf, { base: null, baseUuid: null, baseName: "", image: null });
+    this.forgetWriting();
     this.autoName();
     this.render();
   }
@@ -558,13 +603,38 @@ class GearForgeApp extends ApplicationV2 {
     s.status = "Painting… (20–60 seconds)";
     await this.withBusy("paint", async () => {
       try {
-        s.image = await paint({ base: s.base, baseName: s.baseName || KINDS[s.kind], tags: s.tags, name: s.name || s.baseName || "gear" });
+        s.image = await paint({ base: s.base, baseName: s.baseName || KINDS[s.kind], tags: s.tags, name: s.name || s.baseName || "gear", description: s.description });
         s.status = "";
       } catch (err) {
         reportError("could not paint", err);
         s.status = "Painting failed. See the error above.";
       }
     });
+  }
+
+  static async onSuggest() {
+    const s = this.gf;
+    s.status = "Writing…";
+    await this.withBusy("suggest", async () => {
+      try {
+        s.suggestions = await suggest({ kind: s.kind, baseName: s.baseName || s.base?.name || KINDS[s.kind], tags: s.tags });
+        s.status = "Click a suggestion to use it.";
+      } catch (err) {
+        reportError("could not suggest a name", err);
+        s.status = "Suggesting failed. See the error above.";
+      }
+    });
+  }
+
+  static onPick(event, target) {
+    const s = this.gf;
+    const o = s.suggestions[Number(target.dataset.index)];
+    if (!o) return;
+    if (o.name) Object.assign(s, { name: o.name, nameEdited: true });
+    if (o.description) s.description = o.description;
+    s.picked = o;
+    s.status = "";
+    return this.render();
   }
 
   static async onPost() {

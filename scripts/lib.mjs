@@ -188,26 +188,34 @@ export const DEFAULT_STYLE =
   "inside a dark teal ornamental frame. Painterly, realistic materials with soft lighting and gentle shadows. " +
   "No text, no hands, no background scene.";
 
-/** What the image model sees: the base item and each tag's *visible* description (or its name), never the rules. */
-export function artPrompt({ baseName, tags, style, editing }) {
+/**
+ * What the image model sees: the base item and each tag's *visible* description (or its name), never the rules.
+ * A written description (Suggest, or the GM's own) leads, so the painting matches the text players read.
+ */
+export function artPrompt({ baseName, tags, style, editing, name, description }) {
   const looks = tags.filter((t) => !t.special && !t.drawback && !t.magic).map((t) => t.what || t.name)
     .filter(Boolean).map((w) => w.replace(/\.$/, ""))
     .concat(tags.some((t) => t.magic && !t.drawback) ? ["faint magical runes glowing along it"] : [])
     .join("; ");
   const item = String(baseName ?? "").trim() || "weapon";
+  const told = String(description ?? "").replace(/\s+/g, " ").trim();
+  const known = String(name ?? "").trim();
+  const story = told ? `${known && known !== item ? `It is known as "${known}" (do not write the name on it). ` : ""}How it is described: ${told}` : "";
   if (editing) {
     return [
       `Repaint this item icon as a variant of the ${item}${looks ? `: ${looks}` : ""}.`,
+      story,
       "Keep the exact same frame, parchment, composition, lighting and painting style as the original icon.",
       "One object only, no text."
-    ].join(" ");
+    ].filter(Boolean).join(" ");
   }
   return [
     `Paint a ${item}${looks ? `: ${looks}` : ""}.`,
+    story,
     (style ?? "").trim() || DEFAULT_STYLE,
     "Match the painting style of any reference images, but do not copy their objects.",
     "One object only, no text."
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }
 
 /** Can the base item's own icon be repainted? System SVG placeholders can't. */
@@ -242,4 +250,58 @@ export function pickRefs(paths, max = MAX_REFS, rand = Math.random) {
     [list[i], list[j]] = [list[j], list[i]];
   }
   return list.slice(0, max).sort();
+}
+
+/* Writing: a name and a short description from the tags (fal.ai's OpenRouter LLM endpoint). */
+
+export const WRITE_ENDPOINT = "openrouter/router";
+export const WRITE_MODEL = "anthropic/claude-haiku-4.5";
+
+const WRITE_SYSTEM =
+  "You name and describe gear for Dragonbane, a fantasy tabletop RPG with a gritty, folk-tale, slightly humorous tone. " +
+  "Write like an item card in a rulebook: concrete, sensory, a hint of history or who made it. " +
+  "Never state rules, numbers, dice or game mechanics; the rules are printed separately. " +
+  "Answer with JSON only: {\"options\":[{\"name\":\"…\",\"description\":\"…\"}, …]}.";
+
+/**
+ * The prompt for name/description suggestions. Only tags the players can see go in:
+ * a hidden flaw must not leak into the description they'll read.
+ */
+export function writePrompt({ kind, baseName, tags, count = 3 }) {
+  const lines = tags.filter((t) => !t.hidden && !t.special).map((t) => {
+    const label = t.magic ? (t.drawback ? "curse" : "enchantment") : (t.points ?? 0) < 0 ? "flaw" : "feature";
+    return `- ${t.name} (${label})${t.what ? `: ${t.what.replace(/\.$/, "")}` : ""}`;
+  });
+  const item = String(baseName ?? "").trim() || kind || "weapon";
+  return {
+    system_prompt: WRITE_SYSTEM,
+    prompt: [
+      `Base item: ${item} (${kind}).`,
+      lines.length ? `What sets this one apart:\n${lines.join("\n")}` : "Nothing special sets it apart.",
+      `Give ${count} different options. Each name is 1–4 words: an evocative name, a maker's mark, or "the X of Y"; not just the base item's name. ` +
+      "Each description is 1–2 sentences, under 45 words, and works the features into what the item looks and feels like."
+    ].join("\n\n")
+  };
+}
+
+/** Request body for fal.ai's OpenRouter endpoint. */
+export function writeRequest({ prompt, system_prompt, model }) {
+  return { prompt, system_prompt, model: (model ?? "").trim() || WRITE_MODEL, temperature: 1, max_tokens: 600 };
+}
+
+/** The options out of the model's answer: tolerates code fences and chatter around the JSON. */
+export function parseSuggestions(output) {
+  const text = String(output ?? "");
+  const start = text.indexOf("{"), end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) return [];
+  let data;
+  try { data = JSON.parse(text.slice(start, end + 1)); } catch { return []; }
+  const list = Array.isArray(data) ? data : Array.isArray(data?.options) ? data.options : [data];
+  return list.map((o) => ({ name: String(o?.name ?? "").trim(), description: String(o?.description ?? "").trim() }))
+    .filter((o) => o.name || o.description).slice(0, 5);
+}
+
+/** The written description as HTML for the item: plain paragraphs, escaped. */
+export function flavourHTML(text) {
+  return String(text ?? "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${escapeHTML(p)}</p>`).join("");
 }
