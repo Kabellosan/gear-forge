@@ -27,7 +27,7 @@ Item types: `weapon` (shields are weapons with feature `shield`), `armor`, `helm
 
 ## Layout
 
-- `build.mjs` – vault note → `packs/` (6 tables, rules journal, macro) + `module.json`. First cells like `73–74` are ranges (result weight = size). Needs the vault, so it runs on the server, not in CI; `packs/` is committed.
+- `build.mjs` – vault note → `packs/` (`GEAR_FORGE_NOTE=<path>` builds from another copy of the note) (6 tables, rules journal, macro) + `module.json`. First cells like `73–74` are ranges (result weight = size). Needs the vault, so it runs on the server, not in CI; `packs/` is committed.
 - `scripts/lib.mjs` – pure logic (effects, price, descriptions, prompt, request, cost). No Foundry globals.
 - `scripts/main.mjs` – Foundry glue: settings, entry points, Forge window, fal call, item creation.
 - `tests/` – `cd tests && node lib.test.mjs && node smoke.test.mjs` (run `npm run build` first so the name check has tables).

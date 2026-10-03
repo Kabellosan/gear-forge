@@ -8,8 +8,8 @@ import { compilePack } from "@foundryvtt/foundryvtt-cli";
 
 const MODULE_ID = "gear-forge";
 const REPO = "Kabellosan/gear-forge";
-const VERSION = "1.3.4";
-const NOTE = "/home/captain/cloud-lab/obsidian-data/vault/Ikairos-Server/Capt. Kabel Pairate Vault/"
+const VERSION = "1.4.0";
+const NOTE = process.env.GEAR_FORGE_NOTE || "/home/captain/cloud-lab/obsidian-data/vault/Ikairos-Server/Capt. Kabel Pairate Vault/"
   + "50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/Dragonbane - Arms & Armour Tags (Homebrew).md";
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
 const SRC = path.join(ROOT, "dist", "_src");
