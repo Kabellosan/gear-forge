@@ -381,8 +381,9 @@ async function createItem(s) {
   Object.assign(data.system, L.applyEffects(data.system, tags));
   const label = L.priceLabel(tags, data.system.cost);
   const price = unique ? null : L.scaleCost(data.system.cost, mult);
-  if (price) data.system.cost = price;
-  if (unique && game.system.id === "dragonbane") Object.assign(data.system, { cost: "", supply: "unique" });
+  // The price is GM-only: it goes in the GM description, and the sheet's cost field (players can read it) stays blank.
+  if ("cost" in data.system || game.system.id === "dragonbane") data.system.cost = "";
+  if (unique && game.system.id === "dragonbane") data.system.supply = "unique";
   const text = L.describeTags(tags, { multiplier: mult, price: price ? `${price} (×${mult})` : undefined, label });
   text.visible = L.flavourHTML(s.description) + text.visible;
   if ("itemDescription" in data.system || game.system.id === "dragonbane") {
