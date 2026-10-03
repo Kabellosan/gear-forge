@@ -103,7 +103,7 @@ const app = await api.open(longsword);
 check(app.lastHTML.includes("Longsword") && app.lastHTML.includes("2D8"), "base item shown");
 await app.constructor.onRoll.call(app);
 check(app.gf.tags.map((t) => t.name).join() === "Sturdy,Subtle,Clumsy", "three tags rolled");
-check(app.lastHTML.includes("Net <strong>−1</strong>") && app.lastHTML.includes("6 silver"), "net and price shown (×½)");
+check(app.lastHTML.includes("Net −1") && app.lastHTML.includes("6 silver"), "net and price shown (×½)");
 check(app.gf.name === "Longsword (Sturdy)", "suggested name");
 
 // Painting is off: no button, and calling it does nothing.
@@ -114,7 +114,7 @@ check(falCalls === 0, "no fal.ai call while painting is off");
 // Reroll the curse away, hide nothing, then paint (on) with Face Forge's key.
 await app.constructor.onReroll.call(app, null, { dataset: { index: "2" } });
 check(app.gf.tags[2].name === "Long", "rerolled");
-check(app.lastHTML.includes("Net <strong>+3</strong>") && app.lastHTML.includes("36 gold"), "+3 = ×30");
+check(app.lastHTML.includes("Net +3") && app.lastHTML.includes("36 gold"), "+3 = ×30");
 settings["gear-forge.paint"] = true;
 await app.render();
 check(app.lastHTML.includes('data-action="paint"') && app.lastHTML.includes("~$0.06"), "paint button with cost");
@@ -142,7 +142,7 @@ check(falCalls === 3 && falBody.prompt.includes('"Greyfang"') && falBody.prompt.
 app.gf.tags[1].hidden = true;
 await app.constructor.onCreate.call(app);
 const item = created[0];
-check(item.name === "Greyfang" && item.system.itemDescription.includes("<p>A long blade with a thick spine, notched by old wars.</p><h3>Forged"), "written name and description on the item");
+check(item.name === "Greyfang" && item.system.itemDescription.includes("<p>A long blade with a thick spine, notched by old wars.</p><p class=\"gf-price\"><strong>Price:</strong> 36 gold</p><h3>Forged"), "written name, description and price on the item");
 check(item.img === app.gf.image && item.folder === "folder1", "item uses the painting, in the Gear Forge folder");
 check(item.system.durability === 15 && item.system.features.includes("long") && item.system.features.includes("subtle"), "effects applied, hidden ones too");
 check(item.system.cost === "36 gold", `price scaled (got ${item.system.cost})`);
@@ -153,13 +153,14 @@ check(!("_id" in item) && item.flags["gear-forge"].tags.length === 3, "fresh ite
 // Post: hidden tags stay off the chat card.
 await app.constructor.onPost.call(app);
 check(posted[0].content.includes("notched by old wars"), "chat card has the description");
+check(posted[0].content.includes("<strong>Price:</strong> 36 gold"), "chat card shows the price");
 check(posted[0].content.includes("Sturdy") && !posted[0].content.includes("Subtle"), "chat card hides hidden tags");
 
 // Magic: "Enchanted" rolls its enchantment; Curse rolls a drawback that pays for another.
 await app.constructor.onAdd.call(app);
 const names = () => app.gf.tags.map((t) => t.name).join();
 check(names() === "Sturdy,Subtle,Long,Enchanted,Keen Edge", `Enchanted rolled a spell: ${names()}`);
-check(app.gf.tags[4].parent === app.gf.tags[3].id && app.lastHTML.includes("Magical · Unique"), "spell is the child; price is Unique");
+check(app.gf.tags[4].parent === app.gf.tags[3].id && app.lastHTML.includes(">Unique</span>"), "spell is the child; price is Unique");
 await app.constructor.onCurse.call(app);
 check(names().endsWith("Death Wish,Unbreakable"), `drawback paid for an enchantment: ${names()}`);
 await app.constructor.onReroll.call(app, null, { dataset: { index: "3" } });
