@@ -6,12 +6,27 @@ export const EDIT_MODEL = "fal-ai/gpt-image-1.5/edit";
 export const TEXT_MODEL = "fal-ai/gpt-image-1.5";
 export const MAX_REFS = 4;
 
-/** Which table a Dragonbane item rolls on. Shields are weapons with the "shield" feature. */
+/**
+ * Which table a Dragonbane item rolls on. Shields are weapons with the "shield" feature;
+ * any other gear (type "item") can become a standalone magic item ("trinket").
+ */
 export function kindOf(item) {
   if (!item) return null;
   if (item.type === "armor" || item.type === "helmet") return "armour";
   if (item.type === "weapon") return (item.system?.features ?? []).includes("shield") ? "shield" : "weapon";
+  if (item.type === "item") return "trinket";
   return null;
+}
+
+/** The table a kind rolls its tags on, and the one its enchantments come from. */
+export const tableFor = (kind) => (kind === "trinket" ? "magic-items" : kind);
+export const enchantTableFor = (kind) => (kind === "trinket" ? "magic-items" : kind === "armour" ? "armour-enchantments" : "weapon-enchantments");
+
+/** A tag's label in brackets: +1, rank 2, drawback, or a magic item's band (charm, wonder, relic…). */
+export function tagHead(tag) {
+  if (tag.wonder) return String(tag.band ?? "magic").toLowerCase();
+  if (tag.magic) return tag.drawback ? "drawback" : tag.rank ? `rank ${tag.rank}` : "magic";
+  return signed(tag.points ?? 0);
 }
 
 /**
@@ -207,8 +222,7 @@ export function slugify(s) {
 export function tagHTML(tag) {
   const what = tag.what ? ` — ${escapeHTML(tag.what)}` : "";
   const rule = tag.rule ? ` <em>Dragonbane:</em> ${escapeHTML(tag.rule)}` : "";
-  const head = tag.magic ? (tag.drawback ? "drawback" : tag.rank ? `rank ${tag.rank}` : "magic") : signed(tag.points ?? 0);
-  return `<li><strong>${escapeHTML(tag.name)}</strong> (${head})${what}${rule}</li>`;
+  return `<li><strong>${escapeHTML(tag.name)}</strong> (${tagHead(tag)})${what}${rule}</li>`;
 }
 
 /**
@@ -255,9 +269,13 @@ export function describeTags(tags, { baseCost, priced = false } = {}) {
   };
 }
 
-/** A default name: an enchantment, else the strongest virtue, in brackets after the base item's name. */
+/**
+ * A default name: an enchantment, else the strongest virtue, in brackets after the base item's name.
+ * A magic item with no base item is simply named after its first power (Omen Chime).
+ */
 export function suggestName(baseName, tags) {
   const spell = tags.find((t) => t.magic && !t.drawback && !t.hidden && !t.special);
+  if (spell?.wonder && !String(baseName ?? "").trim()) return spell.name;
   if (spell) return `${baseName} (${spell.name})`;
   const best = [...tags].filter((t) => (t.points ?? 0) > 0 && !t.special && !t.hidden).sort((a, b) => b.points - a.points)[0];
   return best ? `${baseName} (${best.name})` : baseName;
@@ -275,9 +293,10 @@ const NOT_PHOTO = "Hand-painted illustration, not a photograph or 3D render.";
  * A written description (Suggest, or the GM's own) leads, so the painting matches the text players read.
  */
 export function artPrompt({ baseName, tags, style, editing, borrowed, name, description }) {
-  const looks = tags.filter((t) => !t.special && !t.drawback && !t.magic).map((t) => t.what || t.name)
+  const looks = tags.filter((t) => !t.special && !t.drawback && (!t.magic || t.wonder)).map((t) => t.what || t.name)
     .filter(Boolean).map((w) => w.replace(/\.$/, ""))
-    .concat(tags.some((t) => t.magic && !t.drawback) ? ["faint magical runes glowing along it"] : [])
+    .concat(tags.some((t) => t.wonder && !t.special) ? ["a faint glimmer of old magic about it"]
+      : tags.some((t) => t.magic && !t.drawback) ? ["faint magical runes glowing along it"] : [])
     .join("; ");
   const item = String(baseName ?? "").trim() || "weapon";
   const told = String(description ?? "").replace(/\s+/g, " ").trim();
@@ -335,7 +354,7 @@ export function kindFromFile(path) {
   if (/shield|buckler/.test(n)) return "shield";
   if (/armou?r|helmet|helm|mail|cuirass|gambeson/.test(n)) return "armour";
   if (/axe|bow|hammer|sword|dagger|knife|spear|mace|flail|club|staff|sling|lance|pike|halberd|trident|crossbow|scythe|sickle/.test(n)) return "weapon";
-  return null;
+  return "trinket"; // any other gear (ring, bag, lantern…): a magic item can be painted into it
 }
 
 /** Can the base item's own icon be repainted? System SVG placeholders can't. */
@@ -403,7 +422,7 @@ export const fitsSetting = (o) => !ANACHRONISM.test(`${o?.name ?? ""} ${o?.descr
  */
 export function writePrompt({ kind, baseName, tags, count = 3, style = "" }) {
   const lines = tags.filter((t) => !t.hidden && !t.special).map((t) => {
-    const label = t.magic ? (t.drawback ? "curse" : "enchantment") : (t.points ?? 0) < 0 ? "flaw" : "feature";
+    const label = t.wonder ? "magic power" : t.magic ? (t.drawback ? "curse" : "enchantment") : (t.points ?? 0) < 0 ? "flaw" : "feature";
     return `- ${t.name} (${label})${t.what ? `: ${t.what.replace(/\.$/, "")}` : ""}`;
   });
   const item = String(baseName ?? "").trim() || kind || "weapon";

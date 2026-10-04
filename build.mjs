@@ -8,9 +8,11 @@ import { compilePack } from "@foundryvtt/foundryvtt-cli";
 
 const MODULE_ID = "gear-forge";
 const REPO = "Kabellosan/gear-forge";
-const VERSION = "1.6.0";
-const NOTE = process.env.GEAR_FORGE_NOTE || "/home/captain/cloud-lab/obsidian-data/vault/Ikairos-Server/Capt. Kabel Pairate Vault/"
-  + "50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/Dragonbane - Arms & Armour Tags (Homebrew).md";
+const VERSION = "1.7.0";
+const VAULT_DIR = "/home/captain/cloud-lab/obsidian-data/vault/Ikairos-Server/Capt. Kabel Pairate Vault/"
+  + "50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/";
+const NOTE = process.env.GEAR_FORGE_NOTE || VAULT_DIR + "Dragonbane - Arms & Armour Tags (Homebrew).md";
+const MAGIC_NOTE = process.env.GEAR_FORGE_MAGIC_NOTE || VAULT_DIR + "Dragonbane - Magic Items (Homebrew).md";
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
 const SRC = path.join(ROOT, "dist", "_src");
 const STATS = { coreVersion: "14.0", systemId: null, systemVersion: null };
@@ -21,6 +23,7 @@ const id = key => [...crypto.createHash("sha256").update(key).digest()].slice(0,
   .map(b => ID_CHARS[b % ID_CHARS.length]).join("");
 
 const md = fs.readFileSync(NOTE, "utf8");
+const magicMd = fs.readFileSync(MAGIC_NOTE, "utf8");
 const plainText = s => String(s ?? "").replace(/\*\*|\*|`/g, "").replace(/\s*📜\s*/g, " ").trim();
 const inline = s => marked.parseInline(s.replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, "$1"));
 
@@ -31,11 +34,11 @@ const inline = s => marked.parseInline(s.replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]
 // Enchantments:     | 1–2 | **Name** | Rank | Dragonbane |
 // Drawbacks:        | 1 | **Name** | Dragonbane |
 // A first cell like "73–74" covers a range of results.
-function parseSection(startHeading, endHeading) {
-  const start = md.indexOf(startHeading);
-  const end = endHeading ? md.indexOf(endHeading, start) : md.length;
+function parseSection(startHeading, endHeading, text = md) {
+  const start = text.indexOf(startHeading);
+  const end = endHeading ? text.indexOf(endHeading, start) : text.length;
   if ( start < 0 || end < 0 ) throw new Error(`Section not found: ${startHeading}`);
-  return md.slice(start, end).split("\n");
+  return text.slice(start, end).split("\n");
 }
 const cells = line => line.split("|").slice(1, -1).map(c => c.trim());
 const pts = s => Number(s.replace("−", "-").replace("+", ""));
@@ -83,6 +86,20 @@ function magicRows(startHeading, endHeading, { ranked }) {
   });
 }
 
+// Magic items (their own note): | 01 | **Name** | What it is | Dragonbane |, under band headings
+// like "### 06–25 · Wonders (rank 2–3)". Each row is a whole item, so it is magic and Unique.
+function itemRows() {
+  let band = "";
+  const rows = [];
+  for ( const line of parseSection("## ✨", "## ❓", magicMd) ) {
+    if ( line.startsWith("### ") ) { band = line.replace(/^###\s*[\d–]+\s*·\s*/, "").replace(/\s*\(.*$/, "").replace(/s$/, ""); continue; }
+    if ( !ROW.test(line) ) continue;
+    const [, tag, what, rule] = cells(line);
+    rows.push({ range: range(line), tag, points: 0, what, rule, magic: true, wonder: true, band });
+  }
+  return rows;
+}
+
 function buildTable(key, name, formula, rows, description, img) {
   const tableId = id(`table:${key}`);
   const size = Number(formula.slice(2));
@@ -99,10 +116,11 @@ function buildTable(key, name, formula, rows, description, img) {
       const plain = label.replace(/\s*📜\s*/, "").trim();
       const printed = label.includes("📜") ? " 📜 <em>printed</em>" : "";
       const what = r.what ? `${inline(r.what)} ` : "";
-      const head = r.magic ? (r.rank ? `(rank ${r.rank})` : "(drawback)") : `(${signed(r.points)})`;
+      const head = r.wonder ? `(${r.band.toLowerCase()})` : r.magic ? (r.rank ? `(rank ${r.rank})` : "(drawback)") : `(${signed(r.points)})`;
       const resultId = id(`result:${key}:${r.range[0]}`);
       const flags = { tag: plain, points: r.points, what: plainText(r.what), rule: plainText(r.rule) };
       if ( r.magic ) Object.assign(flags, { magic: true, rank: r.rank ?? null, drawback: !!r.drawback });
+      if ( r.wonder ) Object.assign(flags, { wonder: true, band: r.band });
       if ( SPECIAL[plain] ) flags.special = SPECIAL[plain];
       return {
         _id: resultId, _key: `!tables.results!${tableId}.${resultId}`, type: "text", weight: r.range[1] - r.range[0] + 1,
@@ -132,36 +150,45 @@ const tables = [
     magicRows("## ✨ d12 Enchantments", "## 💀", { ranked: true }),
     "Book of Magic (Beta 3) enchanting spells for armour and helmets, weighted by rank.", "icons/magic/defensive/shield-barrier-blue.webp"),
   buildTable("drawbacks", "Drawbacks (d12)", "1d12", magicRows("## 💀", "## 🛡️", { ranked: false }),
-    "Book of Magic (Beta 3) drawbacks. Each pays for one enchantment.", "icons/magic/unholy/strike-body-explode-disintegrate.webp")
+    "Book of Magic (Beta 3) drawbacks. Each pays for one enchantment.", "icons/magic/unholy/strike-body-explode-disintegrate.webp"),
+  buildTable("magic-items", "Magic Items (d100)", "1d100", itemRows(),
+    "01–05 relics, 06–25 wonders, 26–85 charms, 86–99 fickle (a power with a catch), 00 cursed. Every item is Unique.",
+    "icons/svg/aura.svg")
 ];
 const tableUuid = t => `Compendium.${MODULE_ID}.tag-tables.RollTable.${t._id}`;
 
 /* ---------------- Journal ---------------- */
 
-// One page per "## " section of the note. The callouts and provenance at the top become the first page.
-const sections = md.split(/^## /m);
-const intro = sections.shift().replace(/^# .*\n/, "")
-  .replace(/^> \[!\w+\] (.*)$/m, "> **$1**");
+// One journal per note, one page per "## " section. The callouts and provenance at the top become the first page.
 const toHtml = text => marked.parse(text.replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, "$1"));
 const tableLinks = "\n\n**Roll tables:** " + tables.map(t => `@UUID[${tableUuid(t)}]{${t.name}}`).join(" · ")
-  + `\n\n**The Forge:** the *Gear Forge* button in the Items sidebar (or right-click a weapon, shield or armour). Drop a base item, roll tags, reroll or hide any of them, and create the item. Painting is off until the GM turns it on in the module settings.`;
+  + `\n\n**The Forge:** the *Gear Forge* button in the Items sidebar (or right-click a weapon, shield, armour or any gear). Drop a base item, roll tags, reroll or hide any of them, and create the item. Pick *Magic item* to roll a standalone magic item instead. Painting is off until the GM turns it on in the module settings.`;
 
-const journalId = id("journal:rules");
-const pages = [{ name: "About", body: intro + tableLinks }]
-  .concat(sections.map(s => {
-    const [heading, ...rest] = s.split("\n");
-    return { name: heading.trim(), body: rest.join("\n") };
-  }))
-  .map((p, i) => ({
-    _id: id(`page:${p.name}`), _key: `!journal.pages!${journalId}.${id(`page:${p.name}`)}`, name: p.name, type: "text", sort: (i + 1) * 100000,
-    title: { show: true, level: 1 }, text: { format: 1, content: toHtml(p.body.replace(/\n---\s*$/, "")) },
-    ownership: { default: -1 }, flags: {}, _stats: STATS
-  }));
-
-const journal = {
-  _id: journalId, _key: `!journal!${journalId}`, name: "Arms & Armour Tags", folder: null, sort: 0,
-  ownership: { default: 2 }, flags: {}, _stats: STATS, pages
-};
+function buildJournal(key, name, text) {
+  const sections = text.split(/^## /m);
+  const intro = sections.shift().replace(/^# .*\n/, "").replace(/^> \[!\w+\] (.*)$/m, "> **$1**");
+  const journalId = id(key);
+  const pages = [{ name: "About", body: intro + tableLinks }]
+    .concat(sections.map(s => {
+      const [heading, ...rest] = s.split("\n");
+      return { name: heading.trim(), body: rest.join("\n") };
+    }))
+    .map((p, i) => {
+      // The first journal keeps its old page ids, so links into it survive.
+      const pageId = id(key === "journal:rules" ? `page:${p.name}` : `${key}:page:${p.name}`);
+      return {
+        _id: pageId, _key: `!journal.pages!${journalId}.${pageId}`, name: p.name, type: "text", sort: (i + 1) * 100000,
+        title: { show: true, level: 1 }, text: { format: 1, content: toHtml(p.body.replace(/\n---\s*$/, "")) },
+        ownership: { default: -1 }, flags: {}, _stats: STATS
+      };
+    });
+  return {
+    _id: journalId, _key: `!journal!${journalId}`, name, folder: null, sort: 0,
+    ownership: { default: 2 }, flags: {}, _stats: STATS, pages
+  };
+}
+const journals = [buildJournal("journal:rules", "Arms & Armour Tags", md), buildJournal("journal:magic-items", "Magic Items", magicMd)];
+const pageCount = journals.reduce((n, j) => n + j.pages.length, 0);
 
 /* ---------------- Macro ---------------- */
 
@@ -181,7 +208,7 @@ fs.rmSync(path.join(ROOT, "dist"), { recursive: true, force: true });
 fs.rmSync(path.join(ROOT, "packs"), { recursive: true, force: true });
 const packs = [
   { name: "tag-tables", label: "Gear Forge — Tables", type: "RollTable", docs: tables, ownership: { PLAYER: "NONE", ASSISTANT: "OWNER" } },
-  { name: "tag-rules", label: "Gear Forge — Rules", type: "JournalEntry", docs: [journal], ownership: { PLAYER: "OBSERVER", ASSISTANT: "OWNER" } },
+  { name: "tag-rules", label: "Gear Forge — Rules", type: "JournalEntry", docs: journals, ownership: { PLAYER: "OBSERVER", ASSISTANT: "OWNER" } },
   { name: "tag-macros", label: "Gear Forge — Macros", type: "Macro", docs: [macro], ownership: { PLAYER: "NONE", ASSISTANT: "OWNER" } }
 ];
 for ( const pack of packs ) {
@@ -194,7 +221,8 @@ for ( const pack of packs ) {
 const manifest = {
   id: MODULE_ID,
   title: "Gear Forge",
-  description: "A d100 weapon tag table plus d20 shield and armour tables, for rolling up gear with a story. "
+  description: "A d100 weapon tag table plus d20 shield and armour tables, for rolling up gear with a story, "
+    + "and a d100 table of standalone magic items. "
     + "Written for Dragonbane; the 'what it is' half of every tag works in any system.",
   version: VERSION,
   authors: [{ name: "Captain Kabello" }],
@@ -210,4 +238,4 @@ const manifest = {
 // module.json lives at the repo root; pushing a new version to main publishes a release (see .github/workflows).
 fs.writeFileSync(path.join(ROOT, "module.json"), JSON.stringify(manifest, null, 2) + "\n");
 console.log(`Built ${MODULE_ID} ${VERSION}: ${tables.map(t => `${t.name} (${t.results.length})`).join(", ")}, `
-  + `${pages.length} journal pages, 1 macro`);
+  + `${pageCount} journal pages, 1 macro`);
