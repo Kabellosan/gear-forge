@@ -10,6 +10,23 @@ const lacks = (s, part, what) => { if (String(s).includes(part)) throw new Error
 eq(L.kindOf({ type: "weapon", system: { features: ["slashing"] } }), "weapon", "weapon");
 eq(L.kindOf({ type: "weapon", system: { features: ["shield"] } }), "shield", "shield");
 eq([L.kindOf({ type: "armor" }), L.kindOf({ type: "helmet" }), L.kindOf({ type: "spell" })], ["armour", "armour", null], "armour kinds");
+eq(L.kindOf({ type: "item" }), "trinket", "any other gear can become a magic item");
+eq([L.tableFor("weapon"), L.tableFor("trinket"), L.enchantTableFor("armour"), L.enchantTableFor("shield"), L.enchantTableFor("trinket")],
+  ["weapon", "magic-items", "armour-enchantments", "weapon-enchantments", "magic-items"], "tables per kind");
+
+// Magic items: named after their power, labelled by band, painted from their look.
+{
+  const chime = { name: "Omen Chime", magic: true, wonder: true, band: "Charm", what: "A small brass bell on a cord that hums before danger.", rule: "Boon on Awareness." };
+  eq([L.tagHead(chime), L.tagHead({ magic: true, rank: 2 }), L.tagHead({ magic: true, drawback: true }), L.tagHead({ points: -1 })],
+    ["charm", "rank 2", "drawback", "−1"], "tag heads");
+  eq(L.suggestName("", [chime]), "Omen Chime", "a magic item with no base is its power");
+  eq(L.suggestName("Lantern", [chime]), "Lantern (Omen Chime)", "a base item keeps its name");
+  eq(L.priceLabel([chime], ""), "Unique · no market price", "magic items are unique");
+  const art = L.artPrompt({ baseName: "Omen Chime", tags: [chime], editing: false });
+  has(art, "small brass bell", "painted from its look"); has(art, "glimmer of old magic", "a hint of magic"); lacks(art, "Awareness", "rules stay out");
+  lacks(art, "runes", "not weapon runes");
+  has(L.writePrompt({ kind: "magic item", baseName: "Omen Chime", tags: [chime] }).prompt, "- Omen Chime (magic power): A small brass bell", "writing sees the look");
+}
 
 // Damage steps.
 eq([L.stepDamage("D8"), L.stepDamage("2D6"), L.stepDamage("D12"), L.stepDamage("2D10+2"), L.stepDamage("fist")],
@@ -105,7 +122,7 @@ has(L.artPrompt({ baseName: "Shield", tags: [{ name: "Hooked Rim" }], editing: f
   lacks(L.writePrompt({ kind: "weapon", baseName: "Axe", tags: [] }).system_prompt, "Mudwhistle", "no example names to copy");
 }
 eq(["x/axe.webp", "x/shield-crested.webp", "x/armor.webp", "x/helmet.webp", "x/dagger-poison.webp", "x/ring-gold.webp", "x/bag-gold.webp"].map(L.kindFromFile),
-  ["weapon", "shield", "armour", "armour", "weapon", null, null], "core set icon kinds from file names");
+  ["weapon", "shield", "armour", "armour", "weapon", "trinket", "trinket"], "core set icon kinds from file names");
 const magicPrompt = L.artPrompt({ baseName: "Axe", tags: [{ name: "Enchanted", what: "Something was bound", special: { enchant: 1 } }, { name: "Keen Edge", magic: true }, { name: "Death Wish", magic: true, drawback: true }], editing: true });
 has(magicPrompt, "magical runes", "magic shows as runes"); lacks(magicPrompt, "Death Wish", "drawbacks not painted"); lacks(magicPrompt, "Something was bound", "pointer tags not painted");
 eq([L.usableIcon("icons/svg/sword.svg"), L.usableIcon("modules/x/longsword.webp"), L.usableIcon("")], [false, true, false], "usable icon");

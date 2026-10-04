@@ -59,7 +59,12 @@ const sequences = {
   "armour-enchantments": [tag("Supple Armor", 0, "", "No bane on Evade.", { magic: true, rank: 1 })],
   drawbacks: [tag("Death Wish", 0, "", "Sickly.", { magic: true, drawback: true })],
   shield: [tag("Hooked Rim", 1, "", "Toppling.")],
-  armour: [tag("Gorget", 1, "", "No double damage.")]
+  armour: [tag("Gorget", 1, "", "No double damage.")],
+  "magic-items": [
+    tag("Omen Chime", 0, "A small brass bell on a cord that hums before danger.", "Boon on Awareness to notice an ambush.", { magic: true, wonder: true, band: "Charm" }),
+    tag("Cursed", 0, "Something old and wrong is bound into it.", "Roll on Drawbacks.", { magic: true, wonder: true, band: "Cursed", special: { drawback: 1 } }),
+    tag("Luck Penny", 0, "A bent copper coin.", "Push a roll without a condition.", { magic: true, wonder: true, band: "Wonder" })
+  ]
 };
 const counters = {};
 let rolls = 0;
@@ -191,6 +196,28 @@ await app.constructor.onCreate.call(app);
 check(created.at(-1).type === "armor" && created.at(-1).name.startsWith("chainmail"), "armour created from a name");
 await app.constructor.onEnchant.call(app);
 check(app.gf.tags.at(-1).name === "Supple Armor", "armour enchants from the armour table");
+
+// Magic items: no base, one item per roll, named after its power, created as Unique gear.
+app.constructor.onClearBase.call(app);
+Object.assign(app.gf, { kind: "trinket", baseName: "", count: 4, nameEdited: false, name: "", description: "" });
+await app.render();
+check(app.lastHTML.includes("Roll a magic item") && !app.lastHTML.includes('data-action="enchant"') && !app.lastHTML.includes('name="count"'), "magic item mode: one roll button, no tag count or Enchant");
+await app.constructor.onRoll.call(app);
+check(app.gf.tags.map((t) => t.name).join() === "Omen Chime" && app.gf.name === "Omen Chime", `one item, named after itself: ${app.gf.tags.map((t) => t.name)}`);
+check(app.lastHTML.includes("(charm)") && app.lastHTML.includes(">Unique</span>"), "band and Unique shown");
+await app.constructor.onPaint.call(app);
+check(falBody.prompt.includes("small brass bell") && !falBody.prompt.includes("Awareness"), "painted from its look, not its rule");
+check(falBody.image_urls.length === 1 && falBody.prompt.startsWith("Paint a new item into this icon: a Omen Chime"), "painted into a core set gear icon");
+await app.constructor.onAdd.call(app);
+check(app.gf.tags.map((t) => t.name).join() === "Omen Chime,Cursed,Death Wish,Luck Penny", `a cursed second power: drawback pays for another item power: ${app.gf.tags.map((t) => t.name)}`);
+await app.constructor.onCreate.call(app);
+const chime = created.at(-1);
+check(chime.type === "item" && chime.name === "Omen Chime" && chime.system.supply === "unique", `created as Unique gear: ${chime.type} ${chime.name}`);
+check(chime.system.itemDescription.includes("Omen Chime") && chime.system.itemDescription.includes("brass bell"), "the power is on the item");
+await app.constructor.onPost.call(app);
+check(posted.at(-1).content.includes("<h3>Omen Chime</h3>"), "chat card");
+app.setBase({ uuid: "Item.rope", name: "Rope", type: "item", img: "icons/svg/item-bag.svg", toObject() { return { name: "Rope", type: "item", img: this.img, system: { cost: "1 silver" } }; } });
+check(app.gf.kind === "trinket" && app.gf.baseName === "Rope", "dropping gear makes it the base of a magic item");
 
 check(errors.length === 0, `no errors: ${errors.join(" | ")}`);
 console.log("smoke test passed");

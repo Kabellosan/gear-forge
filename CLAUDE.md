@@ -10,6 +10,7 @@ Foundry VTT module for Captain's Dragonbane campaign. Tag tables for rolling up 
 - **Tag count is random by default**: weighted 1–10, mostly about three (`TAG_COUNT_WEIGHTS`, Captain 2026-10-03); the GM can pick a fixed number. **Magic = Unique** (Rulebook p.73): no price, `supply: "unique"`.
 - **Magic comes only from the Book of Magic**: d20 weapon/shield and d12 armour enchantments (rank-weighted), d12 drawbacks. Enchanted (01–03) and Cursed (00) roll into them automatically; **every drawback rolls one enchantment** (BoM's printed trade). Follow-up tags carry `parent`; rerolling or removing a tag takes its children with it.
 
+- **Magic items have their own table and note** (Captain, 2026-10-04: "I kinda liked that chime which foretells of danger. It shouldn't be part of a weapon though. Just a chime."). `Dragonbane - Magic Items (Homebrew).md` (same vault folder) → the d100 *Magic Items* table and journal. Bands: 01–05 relic (≈ BoM rank 4–5), 06–25 wonder (rank 2–3, usually WP), 26–85 charm (rank 1: one boon or one small trick), 86–99 fickle (power + catch), 00 Cursed (drawback pays for another roll here). Rows are whole items (`wonder: true`, `band`), so they're magic and Unique. In the Forge the kind is `trinket` ("Magic item"): one item per roll, *Another power* adds a second, no Enchant button, created as Dragonbane type `item`; any `item`-type gear can be dropped as a base. The Omen Chime and Dowsing Hazel are the weapon tags cut in v1.4.0 for being magic.
 - **The vault note is the source of truth for the tags.** `build.mjs` parses `50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/Dragonbane - Arms & Armour Tags (Homebrew).md` into the compendium packs. Change a tag in the note, never in the packs. Keep its row formats: weapon `| 01 | **Name** | what | rule |` under band headings carrying `(+1)`; shield/armour `| 1 | **Name** | ± | rule |`.
 - **Ids are hashed from names**, so rebuilds keep links; renaming a tag changes its id. `tests/lib.test.mjs` fails if an `EFFECTS` key no longer matches a tag name.
 - **Painting is off by default and only happens on a click** (Captain: don't burn dollars on random loot). Rolling never calls fal.ai; the Paint button only renders when the *Paint gear* setting is on, and shows its cost.
@@ -30,7 +31,7 @@ Item types: `weapon` (shields are weapons with feature `shield`), `armor`, `helm
 
 ## Layout
 
-- `build.mjs` – vault note → `packs/` (`GEAR_FORGE_NOTE=<path>` builds from another copy of the note) (6 tables, rules journal, macro) + `module.json`. First cells like `73–74` are ranges (result weight = size). Needs the vault, so it runs on the server, not in CI; `packs/` is committed.
+- `build.mjs` – vault notes → `packs/` (`GEAR_FORGE_NOTE=<path>` / `GEAR_FORGE_MAGIC_NOTE=<path>` build from other copies) (7 tables, 2 journals, macro) + `module.json`. First cells like `73–74` are ranges (result weight = size). Needs the vault, so it runs on the server, not in CI; `packs/` is committed.
 - `scripts/lib.mjs` – pure logic (effects, price, descriptions, prompt, request, cost). No Foundry globals.
 - `scripts/main.mjs` – Foundry glue: settings, entry points, Forge window, fal call, item creation.
 - `tests/` – `cd tests && node lib.test.mjs && node smoke.test.mjs` (run `npm run build` first so the name check has tables).
@@ -46,7 +47,9 @@ Item types: `weapon` (shields are weapons with feature `shield`), `armor`, `helm
 
 Foundry v14 on Sqyre (installs by manifest URL only; zip needs module.json at the root). Dragonbane system 4.1.1.
 
-## Open threads (as of v1.3.4)
+## Open threads (as of v1.7.0)
+
+- v1.7.0 magic items: first draft, mock-tested only. Check against the Book of Magic's own items when the book is at hand.
 
 - Suggest and text-only painting ran live on 2026-10-03 (v1.3.1). Borrowed-icon painting (v1.3.2) and the compendium index (pack `packageName` matching /dragonbane/) are not yet confirmed live.
 - Otherwise mock-tested only: the Forge window, drop handling, `table.roll()` in v14, and the sidebar/context/sheet entry points are mock-tested only.

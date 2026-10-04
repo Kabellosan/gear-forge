@@ -3,7 +3,7 @@ import * as L from "./lib.mjs";
 const MOD = L.MOD;
 const log = (...a) => console.log("Gear Forge |", ...a);
 const ApplicationV2 = foundry.applications.api.ApplicationV2;
-const KINDS = { weapon: "Weapon", shield: "Shield", armour: "Armour" };
+const KINDS = { weapon: "Weapon", shield: "Shield", armour: "Armour", trinket: "Magic item" };
 
 /* ------------------------------------------------------------------ */
 /*  Settings                                                           */
@@ -123,7 +123,7 @@ async function tagTable(kind) {
   return table;
 }
 
-const enchantTable = (kind) => (kind === "armour" ? "armour-enchantments" : "weapon-enchantments");
+const enchantTable = L.enchantTableFor;
 
 async function rollTag(tableKind, parent = null) {
   const table = await tagTable(tableKind);
@@ -133,7 +133,8 @@ async function rollTag(tableKind, parent = null) {
   return {
     id: foundry.utils.randomID(), parent, roll: roll.total,
     name: f.tag ?? r.name, points: f.points ?? 0, what: f.what ?? "", rule: f.rule ?? L.stripHTML(r.description),
-    magic: !!f.magic, rank: f.rank ?? null, drawback: !!f.drawback, special: f.special ?? null, hidden: false
+    magic: !!f.magic, rank: f.rank ?? null, drawback: !!f.drawback, special: f.special ?? null, hidden: false,
+    ...(f.wonder ? { wonder: true, band: f.band ?? "" } : {})
   };
 }
 
@@ -367,13 +368,13 @@ async function createItem(s) {
   const unique = L.isUnique(tags);
   const data = s.base ? foundry.utils.deepClone(s.base) : {
     name: s.baseName || KINDS[s.kind],
-    type: s.kind === "armour" ? "armor" : "weapon",
+    type: s.kind === "armour" ? "armor" : s.kind === "trinket" ? "item" : "weapon",
     system: s.kind === "shield" ? { features: ["shield"] } : {}
   };
   delete data._id;
   delete data._stats;
   delete data.ownership;
-  data.name = s.name || L.suggestName(data.name, tags);
+  data.name = s.name || L.suggestName(s.base || s.kind !== "trinket" ? data.name : s.baseName, tags) || data.name;
   data.folder = (await gearFolder()).id;
   if (s.image) data.img = s.image;
   data.system = data.system ?? {};
@@ -403,13 +404,16 @@ async function postCard(s) {
     speaker: ChatMessage.getSpeaker({ alias: "The Forge" }),
     content: `<div class="gear-forge-card">
       ${img ? `<img src="${img}" alt="">` : ""}
-      <h3>${L.escapeHTML(s.name || s.base?.name || s.baseName || "Forged gear")}</h3>
+      <h3>${L.escapeHTML(s.name || s.base?.name || s.baseName || (s.kind === "trinket" ? "Magic item" : "Forged gear"))}</h3>
       ${s.base?.system ? `<p class="gf-stats">${L.escapeHTML(L.statLine(s.base.system, shown))}</p>` : ""}
       ${L.flavourHTML(s.description)}
       ${shown.length ? `<ul>${shown.map(L.tagHTML).join("")}</ul>` : ""}
     </div>`
   });
 }
+
+/** A magic item's first power names the object when nothing else does (Omen Chime). */
+const firstPower = (s) => (s.kind === "trinket" ? s.tags.find((t) => t.wonder && !t.special)?.name ?? "" : "");
 
 /* ------------------------------------------------------------------ */
 /*  Dialog                                                             */
@@ -455,7 +459,7 @@ class GearForgeApp extends ApplicationV2 {
 
   setBase(item) {
     const kind = L.kindOf(item);
-    if (!kind) return ui.notifications.warn("Gear Forge: drop a weapon, shield or armour.");
+    if (!kind) return ui.notifications.warn("Gear Forge: drop a weapon, shield, armour or piece of gear.");
     const s = this.gf;
     if (kind !== s.kind) s.tags = [];
     Object.assign(s, { base: item.toObject(), baseUuid: item.uuid, baseName: item.name, kind, image: null });
@@ -473,13 +477,14 @@ class GearForgeApp extends ApplicationV2 {
 
   autoName() {
     const s = this.gf;
-    if (!s.nameEdited) s.name = s.tags.length ? L.suggestName(s.baseName || KINDS[s.kind], s.tags) : "";
+    if (!s.nameEdited) s.name = s.tags.length ? L.suggestName(s.baseName || (s.kind === "trinket" ? "" : KINDS[s.kind]), s.tags) || KINDS[s.kind] : "";
   }
 
   async _renderHTML() {
     const s = this.gf;
     const p = L.pricing(s.tags, s.base?.system?.cost);
     const painting = game.settings.get(MOD, "paint");
+    const trinket = s.kind === "trinket";
     const cost = L.estimateCost(game.settings.get(MOD, "quality"), inputCount(s.base));
 
     const base = s.base
@@ -488,16 +493,16 @@ class GearForgeApp extends ApplicationV2 {
            <span><strong>${L.escapeHTML(s.base.name)}</strong><br><small>${KINDS[s.kind]} · ${L.escapeHTML(L.statLine(s.base.system) || "no stats")}${s.base.system?.cost ? ` · ${L.escapeHTML(s.base.system.cost)}` : ""}</small></span>
            <a data-action="clearBase" title="Clear"><i class="fa-solid fa-xmark"></i></a>
          </div>`
-      : `<div class="gf-drop"><i class="fa-solid fa-hand-holding"></i> Drop a weapon, shield or armour here — or name one:</div>
+      : `<div class="gf-drop"><i class="fa-solid fa-hand-holding"></i> ${s.kind === "trinket" ? "Roll a magic item, or drop a piece of gear to make magic:" : "Drop a weapon, shield or armour here — or name one:"}</div>
          <div class="gf-row">
            <select name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${k === s.kind ? "selected" : ""}>${v}</option>`).join("")}</select>
-           <input type="text" name="baseName" value="${L.escapeHTML(s.baseName)}" placeholder="longsword, hand axe, chainmail…">
+           <input type="text" name="baseName" value="${L.escapeHTML(s.baseName)}" placeholder="${s.kind === "trinket" ? "optional: bell, ring, lantern…" : "longsword, hand axe, chainmail…"}">
          </div>`;
 
     const tags = s.tags.map((t, i) => `
       <li class="${t.points < 0 || t.drawback ? "is-flaw" : ""} ${t.magic && !t.drawback ? "is-magic" : ""} ${t.parent ? "is-child" : ""} ${t.hidden ? "is-hidden" : ""}">
         <span class="gf-num">${t.roll}</span>
-        <span class="gf-tag"><strong>${L.escapeHTML(t.name)}</strong> (${t.magic ? (t.drawback ? "drawback" : `rank ${t.rank}`) : L.signed(t.points)})
+        <span class="gf-tag"><strong>${L.escapeHTML(t.name)}</strong> (${L.tagHead(t)})
           <small>${L.escapeHTML(t.what)} <em>${L.escapeHTML(t.rule)}</em></small></span>
         <a data-action="hide" data-index="${i}" title="${t.hidden ? "Hidden: only the GM sees it on the item" : "Visible to players"}"><i class="fa-solid ${t.hidden ? "fa-eye-slash" : "fa-eye"}"></i></a>
         <a data-action="reroll" data-index="${i}" title="Reroll"><i class="fa-solid fa-dice"></i></a>
@@ -517,11 +522,11 @@ class GearForgeApp extends ApplicationV2 {
     return `
       ${base}
       <div class="gf-row">
-        <label class="gf-count">Tags <select name="count">${[["0", "Random"], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])]
-          .map(([v, t]) => `<option value="${v}" ${String(s.count) === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
-        <button type="button" data-action="roll" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-dice-d20"></i> ${s.tags.length ? "Roll all again" : "Roll tags"}</button>
-        <button type="button" data-action="add" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-plus"></i> One more</button>
-        <button type="button" data-action="enchant" ${s.busy ? "disabled" : ""} title="Roll a Book of Magic enchantment"><i class="fa-solid fa-wand-sparkles"></i> Enchant</button>
+        ${trinket ? "" : `<label class="gf-count">Tags <select name="count">${[["0", "Random"], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])]
+          .map(([v, t]) => `<option value="${v}" ${String(s.count) === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>`}
+        <button type="button" data-action="roll" ${s.busy ? "disabled" : ""}><i class="fa-solid fa-dice-d20"></i> ${trinket ? (s.tags.length ? "Roll another item" : "Roll a magic item") : s.tags.length ? "Roll all again" : "Roll tags"}</button>
+        <button type="button" data-action="add" ${s.busy ? "disabled" : ""} ${trinket ? 'title="Roll a second power into the same object"' : ""}><i class="fa-solid fa-plus"></i> ${trinket ? "Another power" : "One more"}</button>
+        ${trinket ? "" : `<button type="button" data-action="enchant" ${s.busy ? "disabled" : ""} title="Roll a Book of Magic enchantment"><i class="fa-solid fa-wand-sparkles"></i> Enchant</button>`}
         <button type="button" data-action="curse" ${s.busy ? "disabled" : ""} title="Roll a drawback; it pays for one enchantment"><i class="fa-solid fa-skull"></i> Curse</button>
       </div>
       ${s.tags.length ? `<ul class="gf-tags">${tags}</ul>
@@ -592,8 +597,8 @@ class GearForgeApp extends ApplicationV2 {
     await this.withBusy("roll", async () => {
       try {
         const tags = [];
-        const count = s.count || L.rollTagCount();
-        for (let i = 0; i < count; i++) tags.push(...await rollExpanded(s.kind, s.kind));
+        const count = s.kind === "trinket" ? 1 : s.count || L.rollTagCount();
+        for (let i = 0; i < count; i++) tags.push(...await rollExpanded(L.tableFor(s.kind), s.kind));
         Object.assign(s, { tags, image: null, status: "" });
         this.forgetWriting();
         this.autoName();
@@ -603,7 +608,7 @@ class GearForgeApp extends ApplicationV2 {
 
   static async onAdd() {
     const s = this.gf;
-    try { s.tags.push(...await rollExpanded(s.kind, s.kind)); this.autoName(); this.render(); }
+    try { s.tags.push(...await rollExpanded(L.tableFor(s.kind), s.kind)); this.autoName(); this.render(); }
     catch (err) { reportError("could not roll a tag", err); }
   }
 
@@ -623,7 +628,7 @@ class GearForgeApp extends ApplicationV2 {
     const s = this.gf;
     try {
       const old = s.tags[Number(target.dataset.index)];
-      const tableKind = old.drawback ? "drawbacks" : old.magic ? enchantTable(s.kind) : s.kind;
+      const tableKind = old.drawback ? "drawbacks" : old.magic ? enchantTable(s.kind) : L.tableFor(s.kind);
       const fresh = await rollExpanded(tableKind, s.kind, old.parent);
       const gone = family(s.tags, old.id);
       const at = s.tags.findIndex((t) => t.id === old.id);
@@ -660,7 +665,7 @@ class GearForgeApp extends ApplicationV2 {
     s.status = "Painting… (20–60 seconds)";
     await this.withBusy("paint", async () => {
       try {
-        s.image = await paint({ base: s.base, kind: s.kind, baseName: s.baseName || KINDS[s.kind], tags: s.tags, name: s.name || s.baseName || "gear", description: s.description });
+        s.image = await paint({ base: s.base, kind: s.kind, baseName: s.baseName || firstPower(s) || KINDS[s.kind], tags: s.tags, name: s.name || s.baseName || "gear", description: s.description });
         s.status = "";
       } catch (err) {
         reportError("could not paint", err);
@@ -674,7 +679,7 @@ class GearForgeApp extends ApplicationV2 {
     s.status = "Writing…";
     await this.withBusy("suggest", async () => {
       try {
-        s.suggestions = await suggest({ kind: s.kind, baseName: s.baseName || s.base?.name || KINDS[s.kind], tags: s.tags });
+        s.suggestions = await suggest({ kind: s.kind, baseName: s.baseName || s.base?.name || firstPower(s) || KINDS[s.kind], tags: s.tags });
         s.status = "Click a suggestion to use it.";
       } catch (err) {
         reportError("could not suggest a name", err);
