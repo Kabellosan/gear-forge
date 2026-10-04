@@ -8,7 +8,7 @@ import { compilePack } from "@foundryvtt/foundryvtt-cli";
 
 const MODULE_ID = "gear-forge";
 const REPO = "Kabellosan/gear-forge";
-const VERSION = "1.7.0";
+const VERSION = "1.7.1";
 const VAULT_DIR = "/home/captain/cloud-lab/obsidian-data/vault/Ikairos-Server/Capt. Kabel Pairate Vault/"
   + "50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/";
 const NOTE = process.env.GEAR_FORGE_NOTE || VAULT_DIR + "Dragonbane - Arms & Armour Tags (Homebrew).md";
@@ -152,7 +152,7 @@ const tables = [
   buildTable("drawbacks", "Drawbacks (d12)", "1d12", magicRows("## 💀", "## 🛡️", { ranked: false }),
     "Book of Magic (Beta 3) drawbacks. Each pays for one enchantment.", "icons/magic/unholy/strike-body-explode-disintegrate.webp"),
   buildTable("magic-items", "Magic Items (d100)", "1d100", itemRows(),
-    "01–05 relics, 06–25 wonders, 26–85 charms, 86–99 fickle (a power with a catch), 00 cursed. Every item is Unique.",
+    "01–06 relics (01 a printed Legendary Artifact), 07–25 wonders, 26–85 charms, 86–99 fickle (a power with a catch), 00 cursed. Every item is Unique.",
     "icons/svg/aura.svg")
 ];
 const tableUuid = t => `Compendium.${MODULE_ID}.tag-tables.RollTable.${t._id}`;
