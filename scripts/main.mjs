@@ -59,7 +59,7 @@ Hooks.once("init", () => {
 });
 
 Hooks.once("ready", () => {
-  game.modules.get(MOD).api = { open: (item) => GearForgeApp.open(item) };
+  game.modules.get(MOD).api = { open: (item) => GearForgeApp.open(item), paint: (item) => paintItem(item) };
   log("ready — open with game.modules.get('gear-forge').api.open(item?)");
 });
 
@@ -90,16 +90,25 @@ const contextOption = {
   condition: (li) => game.user.isGM && !!L.kindOf(itemFromLi(li)),
   callback: (li) => GearForgeApp.open(itemFromLi(li))
 };
-Hooks.on("getItemContextOptions", (app, options) => options.push(contextOption));          // v13+
-Hooks.on("getItemDirectoryEntryContext", (html, options) => options.push(contextOption)); // v12
+const forged = (item) => Array.isArray(item?.flags?.[MOD]?.tags);
+const paintOption = {
+  name: "Gear Forge: paint it", label: "Gear Forge: paint it",
+  icon: '<i class="fa-solid fa-paintbrush"></i>',
+  condition: (li) => game.user.isGM && forged(itemFromLi(li)),
+  callback: (li) => paintItem(itemFromLi(li))
+};
+Hooks.on("getItemContextOptions", (app, options) => options.push(contextOption, paintOption));          // v13+
+Hooks.on("getItemDirectoryEntryContext", (html, options) => options.push(contextOption, paintOption)); // v12
 
 Hooks.on("getHeaderControlsItemSheetV2", (app, controls) => {
   if (!game.user.isGM || !L.kindOf(app.document)) return;
   controls.push({ icon: "fa-solid fa-hammer", label: "Gear Forge", action: "gearForge", onClick: () => GearForgeApp.open(app.document) });
+  if (forged(app.document)) controls.push({ icon: "fa-solid fa-paintbrush", label: "Gear Forge: paint it", action: "gearForgePaint", onClick: () => paintItem(app.document) });
 });
 Hooks.on("getItemSheetHeaderButtons", (app, buttons) => {
   if (!game.user.isGM || !L.kindOf(app.item)) return;
   buttons.unshift({ label: "Gear Forge", class: "gear-forge-open", icon: "fa-solid fa-hammer", onclick: () => GearForgeApp.open(app.item) });
+  if (forged(app.item)) buttons.unshift({ label: "Paint it", class: "gear-forge-paint", icon: "fa-solid fa-paintbrush", onclick: () => paintItem(app.item) });
 });
 
 function reportError(what, err) {
@@ -366,6 +375,25 @@ async function paint({ base, kind, baseName, tags, name, description }) {
   return up?.path ?? `${dir}/${file.name}`;
 }
 
+/**
+ * Paint an item that was forged earlier (Captain, 2026-10-04: "Is it possible to paint it later?").
+ * Uses the tags, name and description saved on the item, and repaints the base item's icon when it can.
+ */
+async function paintItem(item) {
+  if (!item || !forged(item)) return;
+  if (!game.settings.get(MOD, "paint")) return ui.notifications.warn("Gear Forge: turn on Paint gear in the module settings to paint (a few cents per picture).");
+  const f = item.flags[MOD];
+  const base = (f.base && await fromUuid(f.base).catch(() => null)) ?? (L.usableIcon(item.img) && !String(item.img).includes("/gear-forge/") ? item : null);
+  const kind = f.kind ?? L.kindOf(item) ?? "weapon";
+  ui.notifications.info(`Gear Forge: painting ${item.name}… (20–60 seconds)`);
+  try {
+    const img = await paint({ base, kind, baseName: base?.name || f.baseName || KINDS[kind], tags: f.tags, name: item.name, description: f.description ?? "" });
+    await item.update({ img });
+    ui.notifications.info(`Gear Forge: painted ${item.name}.`);
+    return img;
+  } catch (err) { reportError("could not paint", err); }
+}
+
 /** Ask the writing model for name/description options. Hidden tags stay out of the prompt. */
 async function suggest({ kind, baseName, tags }) {
   const ask = L.writePrompt({ kind: KINDS[kind].toLowerCase(), baseName, tags, style: game.settings.get(MOD, "writeStyle") });
@@ -423,7 +451,7 @@ async function createItem(s) {
   } else if (data.system.description && typeof data.system.description === "object") {
     data.system.description.value = appendHTML(data.system.description.value, text.visible + text.hidden);
   }
-  foundry.utils.setProperty(data, `flags.${MOD}`, { tags, base: s.baseUuid ?? null });
+  foundry.utils.setProperty(data, `flags.${MOD}`, { tags, base: s.baseUuid ?? null, kind: s.kind, baseName: s.baseName || "", description: s.description || "" });
   return Item.create(data);
 }
 

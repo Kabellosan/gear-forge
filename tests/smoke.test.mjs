@@ -101,6 +101,7 @@ globalThis.game = {
   settings: { register() {}, get: (m, k) => { const v = settings[`${m}.${k}`]; if (v === undefined) throw new Error(`no setting ${m}.${k}`); return v; } },
   folders: { find: () => null }
 };
+globalThis.fromUuid = async (u) => game.items.find((i) => i.uuid === u) ?? null;
 globalThis.Folder = { create: async (d) => ({ id: "folder1", ...d }) };
 globalThis.Item = { create: async (d) => { created.push(d); return { ...d, sheet: { render() {} } }; } };
 const posted = [];
@@ -240,7 +241,18 @@ await app.render();
 check(app.lastHTML.includes("no picture"), "without painting the button says so");
 await app.constructor.onForge.call(app);
 check(falCalls === before.fal + 3 && created.length === before.items + 2, "no painting call when painting is off");
+// Paint it later: the saved tags, name and description go into the painting, the item gets the picture.
+const unpainted = created.at(-1);
+check(unpainted.flags["gear-forge"].kind === "weapon" && unpainted.flags["gear-forge"].description.includes("notched"), "the item remembers what painting needs");
+let updated = null;
+const doc = { ...unpainted, update: async (d) => { updated = d; } };
+await api.paint(doc);
+check(falCalls === before.fal + 3 && !updated, "no painting while painting is off");
+check(errors.pop()?.includes("turn on Paint gear"), "says how to turn painting on");
 settings["gear-forge.paint"] = true;
+await api.paint(doc);
+check(falCalls === before.fal + 4 && falBody.prompt.includes("Greyfang") && falBody.prompt.includes("notched"), "paints later from the saved name and description");
+check(updated?.img?.startsWith("worlds/vale/gear-forge/"), "the item gets the picture");
 
 // Magic items: no base, one item per roll, named after its power, created as Unique gear.
 app.constructor.onClearBase.call(app);
