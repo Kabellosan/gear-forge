@@ -458,6 +458,7 @@ class GearForgeApp extends ApplicationV2 {
     position: { width: 620, height: "auto" },
     actions: {
       roll: GearForgeApp.onRoll,
+      forge: GearForgeApp.onForge,
       add: GearForgeApp.onAdd,
       enchant: GearForgeApp.onEnchant,
       curse: GearForgeApp.onCurse,
@@ -555,6 +556,7 @@ class GearForgeApp extends ApplicationV2 {
 
     return `
       ${base}
+      <button type="button" class="gf-forge" data-action="forge" ${s.busy ? "disabled" : ""} title="Base, tags, name, description${painting ? ", painting" : ""} and the item, in one go${painting ? "" : " (turn on Paint gear in the settings to include a picture)"}"><i class="fa-solid fa-hammer${s.busy === "forge" ? " fa-beat-fade" : ""}"></i> Forge a finished ${trinket ? "magic item" : "item"} · ${painting ? `~$${cost.toFixed(2)}` : "no picture"}</button>
       <div class="gf-row">
         ${trinket ? "" : `<label class="gf-count">Tags <select name="count">${[["0", "Random"], ...Array.from({ length: 10 }, (_, i) => [String(i + 1), String(i + 1)])]
           .map(([v, t]) => `<option value="${v}" ${String(s.count) === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>`}
@@ -626,18 +628,62 @@ class GearForgeApp extends ApplicationV2 {
     finally { this.gf.busy = false; if (this.rendered) await this.render(); }
   }
 
-  static async onRoll() {
+  /** A base (typed, dropped or random) and a fresh set of tags. */
+  async rollAll() {
     const s = this.gf;
+    await this.resolveBase();
+    const tags = [];
+    const count = s.kind === "trinket" ? 1 : s.count || L.rollTagCount();
+    for (let i = 0; i < count; i++) tags.push(...await rollExpanded(L.tableFor(s.kind), s.kind));
+    Object.assign(s, { tags, image: null });
+    this.forgetWriting();
+    this.autoName();
+  }
+
+  static async onRoll() {
     await this.withBusy("roll", async () => {
+      try { await this.rollAll(); } catch (err) { reportError("could not roll tags", err); }
+    });
+  }
+
+  /**
+   * One click, a finished item (Captain, 2026-10-04): base, tags, the first suggested name and
+   * description, a painting when *Paint gear* is on, then the item itself. A failed writing or
+   * painting step doesn't stop it: the item gets the plain name or the base icon instead.
+   */
+  static async onForge() {
+    const s = this.gf;
+    await this.withBusy("forge", async () => {
       try {
-        await this.resolveBase();
-        const tags = [];
-        const count = s.kind === "trinket" ? 1 : s.count || L.rollTagCount();
-        for (let i = 0; i < count; i++) tags.push(...await rollExpanded(L.tableFor(s.kind), s.kind));
-        Object.assign(s, { tags, image: null });
-        this.forgetWriting();
+        s.status = "Rolling…";
+        await this.rollAll();
+        s.nameEdited = false;
+        s.description = "";
         this.autoName();
-      } catch (err) { reportError("could not roll tags", err); }
+        s.status = "Writing…";
+        await this.render();
+        try {
+          const [o] = await suggest({ kind: s.kind, baseName: s.baseName || s.base?.name || firstPower(s) || KINDS[s.kind], tags: s.tags });
+          if (o) {
+            if (o.name) Object.assign(s, { name: o.name, nameEdited: true });
+            if (o.description) s.description = o.description;
+            s.picked = o;
+          }
+        } catch (err) { reportError("could not suggest a name (keeping the plain one)", err); }
+        if (game.settings.get(MOD, "paint")) {
+          s.status = "Painting… (20–60 seconds)";
+          await this.render();
+          try { s.image = await paint({ base: s.base, kind: s.kind, baseName: s.baseName || firstPower(s) || KINDS[s.kind], tags: s.tags, name: s.name || s.baseName || "gear", description: s.description }); }
+          catch (err) { reportError("could not paint (keeping the base icon)", err); }
+        }
+        const item = await createItem(s);
+        s.status = `Created ${item.name}.`;
+        ui.notifications.info(`Gear Forge: created ${item.name}.`);
+        item.sheet?.render(true);
+      } catch (err) {
+        reportError("could not forge the item", err);
+        s.status = "Forging failed. See the error above.";
+      }
     });
   }
 
