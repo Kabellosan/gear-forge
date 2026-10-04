@@ -224,6 +224,24 @@ await app.constructor.onRoll.call(app);
 await app.constructor.onCreate.call(app);
 check(created.at(-1).system.damage === "2D6" && created.at(-1).system.str >= 7, "the created weapon carries the book damage");
 
+// One click: random base, tags, the first suggestion, a painting, and the item.
+app.constructor.onClearBase.call(app);
+Object.assign(app.gf, { kind: "weapon", baseName: "", nameEdited: false, name: "", description: "" });
+await app.render();
+check(app.lastHTML.includes('data-action="forge"') && app.lastHTML.includes("~$0.06"), "one-click button with its cost");
+const before = { fal: falCalls, items: created.length };
+await app.constructor.onForge.call(app);
+const forged = created.at(-1);
+check(created.length === before.items + 1 && falCalls === before.fal + 2, "one click: one writing call, one painting, one item");
+check(forged.name === "Greyfang" && forged.system.itemDescription.includes("notched by old wars"), "first suggestion used for name and description");
+check(forged.system.damage === "2D6" && forged.img?.startsWith("worlds/vale/gear-forge/"), "book damage and the painting on the item");
+settings["gear-forge.paint"] = false;
+await app.render();
+check(app.lastHTML.includes("no picture"), "without painting the button says so");
+await app.constructor.onForge.call(app);
+check(falCalls === before.fal + 3 && created.length === before.items + 2, "no painting call when painting is off");
+settings["gear-forge.paint"] = true;
+
 // Magic items: no base, one item per roll, named after its power, created as Unique gear.
 app.constructor.onClearBase.call(app);
 Object.assign(app.gf, { kind: "trinket", baseName: "", count: 4, nameEdited: false, name: "", description: "" });
