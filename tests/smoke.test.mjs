@@ -88,8 +88,16 @@ globalThis.game = {
       { name: "Chainmail", type: "armor", img: "modules/dragonbane-core/art/chainmail.webp" },
       { name: "Leather Armor", type: "armor", img: "modules/dragonbane-core/art/leather.webp" },
       { name: "Dagger", type: "weapon", img: "modules/dragonbane-core/art/dagger.webp", system: { features: ["piercing"] } }
-    ] }]
+    ] }],
+    ["dragonbane-coreset.adventure", { documentName: "Adventure", collection: "dragonbane-coreset.adventure", metadata: { packageName: "dragonbane-coreset" }, getDocuments: async () => [{ items: [
+      { name: "Studded Leather", type: "armor", img: "modules/dragonbane-coreset/x.webp", system: { rating: 2, cost: "10 silver" } },
+      { name: "Rope", type: "item", system: { cost: "1 silver" } }
+    ] }] }]
   ]),
+  items: [
+    { uuid: "Item.ha", name: "Hand Axe", type: "weapon", img: "worlds/vale/hand-axe.webp", toObject() { return { name: this.name, type: "weapon", img: this.img, system: { str: 7, durability: 9, damage: "2D6", cost: "2 silver", features: ["slashing"] } }; } },
+    { uuid: "Item.forged", name: "Hand Axe of Old", type: "weapon", toObject() { return { name: this.name, type: "weapon", flags: { "gear-forge": { tags: [] } }, system: { damage: "2D6" } }; } }
+  ],
   settings: { register() {}, get: (m, k) => { const v = settings[`${m}.${k}`]; if (v === undefined) throw new Error(`no setting ${m}.${k}`); return v; } },
   folders: { find: () => null }
 };
@@ -187,6 +195,7 @@ check(magicItem.system.gmDescription.includes("Unique"), "unique noted for the G
 app.constructor.onClearBase.call(app);
 app.gf.kind = "armour"; app.gf.baseName = "chainmail";
 await app.constructor.onRoll.call(app);
+check(app.gf.status.includes('No standard armour called "chainmail"'), "an unknown name says it gets no book stats");
 await app.constructor.onPaint.call(app);
 check(falModel === "fal-ai/gpt-image-1.5/edit" && falBody.image_urls.length === 1 && falBody.prompt.startsWith("Paint a new item into this icon: a chainmail"), "no base icon: paints into the matching compendium icon");
 app.gf.baseName = "helmet with a crest";
@@ -196,6 +205,24 @@ await app.constructor.onCreate.call(app);
 check(created.at(-1).type === "armor" && created.at(-1).name.startsWith("chainmail"), "armour created from a name");
 await app.constructor.onEnchant.call(app);
 check(app.gf.tags.at(-1).name === "Supple Armor", "armour enchants from the armour table");
+
+// No base given: weapons start from a standard item with book stats, typed or random.
+app.constructor.onClearBase.call(app);
+Object.assign(app.gf, { kind: "weapon", baseName: "hand axe", nameEdited: false, name: "" });
+await app.resolveBase();
+await app.render();
+check(app.gf.base?.name === "Hand Axe" && app.lastHTML.includes("Damage 2D6 · STR 7"), "a typed name finds the standard weapon and its damage");
+app.constructor.onClearBase.call(app);
+app.gf.kind = "armour";
+await app.constructor.onRoll.call(app);
+check(app.gf.base?.name === "Studded Leather" && app.gf.status === "" && app.lastHTML.includes("Armour 2"), "rolling with no base picks a random standard armour from the adventure pack");
+app.constructor.onClearBase.call(app);
+app.gf.kind = "weapon";
+await app.constructor.onRandomBase.call(app);
+check(app.gf.base?.name === "Hand Axe", "random base skips forged items");
+await app.constructor.onRoll.call(app);
+await app.constructor.onCreate.call(app);
+check(created.at(-1).system.damage === "2D6" && created.at(-1).system.str >= 7, "the created weapon carries the book damage");
 
 // Magic items: no base, one item per roll, named after its power, created as Unique gear.
 app.constructor.onClearBase.call(app);

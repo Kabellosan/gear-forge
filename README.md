@@ -2,7 +2,7 @@
 
 A Foundry VTT module (v13–v14) for rolling up weapons, shields and armour with a story, and standalone magic items.
 
-- **The Forge** (Items sidebar → *Gear Forge*, or right-click a weapon, shield or armour): drop a base item, roll tags (a weighted 1–10, usually about three, or pick a number), reroll or hide any of them, and create the item with its stats, price and description adjusted.
+- **The Forge** (Items sidebar → *Gear Forge*, or right-click a weapon, shield or armour): drop a base item, type its name or leave it blank for a random standard one (it keeps its book damage, STR and armour), roll tags (a weighted 1–10, usually about three, or pick a number), reroll or hide any of them, and create the item with its stats, price and description adjusted.
 - **Weapon Tags (d100)**: low is good, as in Dragonbane: 01 best (Enchanted), 00 worst (Cursed); 01–80 virtues (34–49 Demanding: better, with a STR or AGL requirement), 81–00 flaws. **Shield Tags (d20)** and **Armour Tags (d20)**: 1–15 virtues, 16–20 flaws.
 - **Balanced toward Dragonbane RAW**: printed features first, price anchored on Mastercrafted (×10), and magic only from the *Book of Magic*: enchantment and drawback tables, with each drawback paying for an enchantment. Magic items are Unique, with no price.
 - **Magic Items (d100)**: standalone magic items that aren't weapons or armour: 01–06 relics (01 a printed Legendary Artifact), 07–25 wonders, 26–85 charms, 86–99 fickle (a real power with a real catch), 00 cursed (a Book of Magic drawback that pays for a second power). Pick *Magic item* in the Forge to roll one, or drop any piece of gear on it to make that thing magic. Every item is Unique.

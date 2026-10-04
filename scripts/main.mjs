@@ -275,6 +275,36 @@ async function compendiumIcons() {
   return (iconIndex = out);
 }
 
+/**
+ * Standard gear with book stats to forge on: Dragonbane item compendiums, items inside Dragonbane
+ * adventure compendiums (the core set ships its gear that way), and world items that weren't forged here.
+ */
+let baseIndex = null;
+async function baseCatalogue() {
+  if (baseIndex) return baseIndex;
+  const out = [], seen = new Set();
+  const add = (e, uuid) => {
+    const key = `${L.kindOf(e)}:${String(e.name).toLowerCase()}`;
+    if (!L.hasStats(e) || seen.has(key) || e.flags?.[MOD]) return;
+    seen.add(key);
+    out.push({ name: e.name, type: e.type, img: e.img, system: foundry.utils.deepClone(e.system ?? {}), uuid: uuid ?? e.uuid ?? null });
+  };
+  for (const pack of game.packs?.values?.() ?? []) {
+    const pkg = `${pack.metadata?.packageName ?? ""} ${pack.metadata?.id ?? pack.collection ?? ""}`;
+    if (!/dragonbane/i.test(pkg)) continue;
+    try {
+      if (pack.documentName === "Item") {
+        for (const e of await pack.getIndex({ fields: ["img", "type", "system"] })) add(e, e.uuid);
+      } else if (pack.documentName === "Adventure") {
+        for (const adv of await pack.getDocuments()) for (const i of adv.items ?? []) add(i.toObject?.() ?? i, null);
+      }
+    } catch (err) { log("could not read", pack.collection, err); }
+  }
+  for (const i of game.items ?? []) add(i.toObject?.() ?? i, i.uuid);
+  log(`${out.length} standard items to forge on`);
+  return (baseIndex = out);
+}
+
 /** How many images go along with a painting: the base icon, the style references, or a borrowed icon. */
 function inputCount(base) {
   if (L.usableIcon(base?.img)) return 1;
@@ -435,6 +465,7 @@ class GearForgeApp extends ApplicationV2 {
       remove: GearForgeApp.onRemove,
       hide: GearForgeApp.onHide,
       clearBase: GearForgeApp.onClearBase,
+      randomBase: GearForgeApp.onRandomBase,
       paint: GearForgeApp.onPaint,
       suggest: GearForgeApp.onSuggest,
       pick: GearForgeApp.onPick,
@@ -462,7 +493,8 @@ class GearForgeApp extends ApplicationV2 {
     if (!kind) return ui.notifications.warn("Gear Forge: drop a weapon, shield, armour or piece of gear.");
     const s = this.gf;
     if (kind !== s.kind) s.tags = [];
-    Object.assign(s, { base: item.toObject(), baseUuid: item.uuid, baseName: item.name, kind, image: null });
+    const data = item.toObject ? item.toObject() : foundry.utils.deepClone({ name: item.name, type: item.type, img: item.img, system: item.system });
+    Object.assign(s, { base: data, baseUuid: item.uuid ?? null, baseName: item.name, kind, image: null });
     this.forgetWriting();
     this.autoName();
   }
@@ -491,12 +523,14 @@ class GearForgeApp extends ApplicationV2 {
       ? `<div class="gf-drop has-base">
            <img src="${s.base.img}" alt="">
            <span><strong>${L.escapeHTML(s.base.name)}</strong><br><small>${KINDS[s.kind]} · ${L.escapeHTML(L.statLine(s.base.system) || "no stats")}${s.base.system?.cost ? ` · ${L.escapeHTML(s.base.system.cost)}` : ""}</small></span>
+           ${trinket ? "" : `<a data-action="randomBase" title="Another random standard ${KINDS[s.kind].toLowerCase()}"><i class="fa-solid fa-shuffle"></i></a>`}
            <a data-action="clearBase" title="Clear"><i class="fa-solid fa-xmark"></i></a>
          </div>`
-      : `<div class="gf-drop"><i class="fa-solid fa-hand-holding"></i> ${s.kind === "trinket" ? "Roll a magic item, or drop a piece of gear to make magic:" : "Drop a weapon, shield or armour here — or name one:"}</div>
+      : `<div class="gf-drop"><i class="fa-solid fa-hand-holding"></i> ${s.kind === "trinket" ? "Roll a magic item, or drop a piece of gear to make magic:" : "Drop a weapon, shield or armour here, name one, or leave it blank for a random one:"}</div>
          <div class="gf-row">
            <select name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${k === s.kind ? "selected" : ""}>${v}</option>`).join("")}</select>
-           <input type="text" name="baseName" value="${L.escapeHTML(s.baseName)}" placeholder="${s.kind === "trinket" ? "optional: bell, ring, lantern…" : "longsword, hand axe, chainmail…"}">
+           <input type="text" name="baseName" value="${L.escapeHTML(s.baseName)}" placeholder="${s.kind === "trinket" ? "optional: bell, ring, lantern…" : "longsword, hand axe, chainmail… (blank: a random one)"}">
+           ${trinket ? "" : `<button type="button" data-action="randomBase" ${s.busy ? "disabled" : ""} title="Pick a random standard ${KINDS[s.kind].toLowerCase()} with its book stats"><i class="fa-solid fa-shuffle"></i></button>`}
          </div>`;
 
     const tags = s.tags.map((t, i) => `
@@ -560,13 +594,13 @@ class GearForgeApp extends ApplicationV2 {
 
   _replaceHTML(result, content) {
     content.innerHTML = result;
-    content.querySelectorAll("input, select, textarea").forEach((el) => el.addEventListener("change", () => {
+    content.querySelectorAll("input, select, textarea").forEach((el) => el.addEventListener("change", async () => {
       const s = this.gf;
       if (el.name === "count") s.count = Math.clamp(Number(el.value) || 0, 0, 10);
       else if (el.name === "name") { s.name = el.value; s.nameEdited = !!el.value; }
       else if (el.name === "description") s.description = el.value;
       else if (el.name === "kind") { if (el.value !== s.kind) s.tags = []; s.kind = el.value; this.autoName(); this.render(); }
-      else if (el.name === "baseName") { s.baseName = el.value; this.autoName(); this.render(); }
+      else if (el.name === "baseName") { s.baseName = el.value; if (s.baseName.trim()) await this.resolveBase(); this.autoName(); this.render(); }
     }));
     if (content.dataset.gfDrop) return;
     content.dataset.gfDrop = "1";
@@ -596,10 +630,11 @@ class GearForgeApp extends ApplicationV2 {
     const s = this.gf;
     await this.withBusy("roll", async () => {
       try {
+        await this.resolveBase();
         const tags = [];
         const count = s.kind === "trinket" ? 1 : s.count || L.rollTagCount();
         for (let i = 0; i < count; i++) tags.push(...await rollExpanded(L.tableFor(s.kind), s.kind));
-        Object.assign(s, { tags, image: null, status: "" });
+        Object.assign(s, { tags, image: null });
         this.forgetWriting();
         this.autoName();
       } catch (err) { reportError("could not roll tags", err); }
@@ -649,6 +684,31 @@ class GearForgeApp extends ApplicationV2 {
   static onHide(event, target) {
     const t = this.gf.tags[Number(target.dataset.index)];
     t.hidden = !t.hidden;
+    this.render();
+  }
+
+  /**
+   * Weapons, shields and armour start from a standard item, so they have book stats (damage, STR, rating):
+   * the one the typed name names, or a random one when nothing was given. Returns false if none matched.
+   */
+  async resolveBase({ random = false } = {}) {
+    const s = this.gf;
+    if (s.kind === "trinket" || (s.base && !random)) return true;
+    const pick = L.matchBase(await baseCatalogue(), s.kind, random ? "" : s.baseName);
+    if (!pick) {
+      s.status = s.baseName && !random ? `No standard ${KINDS[s.kind].toLowerCase()} called "${s.baseName}": it gets no book stats. Pick one from the list, or drop one.` : `No standard ${KINDS[s.kind].toLowerCase()} found in the Dragonbane compendiums: drop one to get book stats.`;
+      return false;
+    }
+    const tags = s.tags;
+    this.setBase(pick);
+    s.tags = tags;
+    s.status = "";
+    return true;
+  }
+
+  static async onRandomBase() {
+    await this.resolveBase({ random: true });
+    this.autoName();
     this.render();
   }
 

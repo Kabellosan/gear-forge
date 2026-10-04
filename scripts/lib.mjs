@@ -345,6 +345,35 @@ export function pickIcon(icons, kind, baseName = "", rand = Math.random) {
   return top[Math.floor(rand() * top.length)];
 }
 
+/** A standard item with book stats to forge on: a weapon or shield with damage, armour or a helmet with a rating. */
+export function hasStats(item) {
+  const kind = kindOf(item);
+  if (kind === "weapon" || kind === "shield") return !!item.system?.damage || kind === "shield" && !!item.system?.durability;
+  if (kind === "armour") return item.system?.rating != null && item.system.rating !== "";
+  return false;
+}
+
+const squash = (t) => String(t).toLowerCase().replace(/[^a-z]/g, "");
+
+/**
+ * The base to forge on: a standard item of this kind with book stats. With a name, the one it names
+ * ("long sword" finds Longsword), else the one sharing the most words, else null. With no name, a random one.
+ * items: [{ name, type, system, … }].
+ */
+export function matchBase(items, kind, name = "", rand = Math.random) {
+  const pool = (items ?? []).filter((i) => kindOf(i) === kind && hasStats(i));
+  if (!pool.length) return null;
+  const want = squash(name);
+  if (!want) return pool[Math.floor(rand() * pool.length)];
+  const exact = pool.find((i) => squash(i.name) === want);
+  if (exact) return exact;
+  const words = new Set(String(name).toLowerCase().match(/[a-z]{3,}/g) ?? []);
+  const score = (i) => (String(i.name).toLowerCase().match(/[a-z]{3,}/g) ?? []).filter((w) => words.has(w) || words.has(w.replace(/s$/, ""))).length
+    + (squash(i.name).includes(want) || want.includes(squash(i.name)) ? 2 : 0);
+  const best = Math.max(...pool.map(score));
+  return best > 0 ? pool.find((i) => score(i) === best) : null;
+}
+
 /** The Dragonbane core set's gear icons, where Foundry installs them (no art ships with this module). */
 export const CORESET_ICONS = "modules/dragonbane-coreset/assets/icons/gear";
 
