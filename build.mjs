@@ -8,7 +8,7 @@ import { compilePack } from "@foundryvtt/foundryvtt-cli";
 
 const MODULE_ID = "gear-forge";
 const REPO = "Kabellosan/gear-forge";
-const VERSION = "1.7.1";
+const VERSION = "1.8.0";
 const VAULT_DIR = "/home/captain/cloud-lab/obsidian-data/vault/Ikairos-Server/Capt. Kabel Pairate Vault/"
   + "50 TTRPG Sanctum/63 TTRPG Systems/Dragonbane/";
 const NOTE = process.env.GEAR_FORGE_NOTE || VAULT_DIR + "Dragonbane - Arms & Armour Tags (Homebrew).md";

@@ -173,4 +173,24 @@ eq([L.parseSuggestions("no json here"), L.parseSuggestions("{broken")], [[], []]
 eq(L.flavourHTML("A <b>blade</b>.\n\nSecond."), "<p>A &lt;b&gt;blade&lt;/b&gt;.</p><p>Second.</p>", "description as escaped paragraphs");
 eq(L.flavourHTML("  "), "", "empty description adds nothing");
 
+
+// A base with book stats: a typed name finds it, a blank one rolls a random one.
+{
+  const std = [
+    { name: "Longsword", type: "weapon", system: { damage: "2D8" } },
+    { name: "Short Sword", type: "weapon", system: { damage: "D10" } },
+    { name: "Small Shield", type: "weapon", system: { features: ["shield"], durability: 15 } },
+    { name: "Chainmail", type: "armor", system: { rating: 4 } },
+    { name: "Stick", type: "weapon", system: {} }
+  ];
+  eq(L.matchBase(std, "weapon", "long sword")?.name, "Longsword", "base Longsword");
+  eq(L.matchBase(std, "weapon", "shortsword")?.name, "Short Sword", "base Short Sword");
+  eq(L.matchBase(std, "weapon", "pitchfork"), null, "base null");
+  eq(L.matchBase(std, "weapon", "stick"), null, "base null");
+  eq(L.matchBase(std, "shield", "")?.name, "Small Shield", "base Small Shield");
+  eq(L.matchBase(std, "armour", "chain mail")?.name, "Chainmail", "base Chainmail");
+  eq(L.matchBase(std, "weapon", "", () => 0.99)?.name, "Short Sword", "base Short Sword");
+  eq(L.hasStats({ name: "Rope", type: "item", system: {} }), false, "gear has no book stats");
+}
+
 console.log("lib tests passed");
